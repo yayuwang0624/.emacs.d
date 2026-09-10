@@ -161,7 +161,7 @@ Signal an error if the entire string was not used."
     '("." . miao-mark-string-inner)
     '(";" . miao-toggle-mark-point))
   (miao-define-keys 'insert
-    '("M-SPC" . miao-leader-mode))
+    '("M-SPC" . miao-leader))
   (miao-leader-define-keys
     '("b r" . revert-buffer)
     '("f r" . recentf)
