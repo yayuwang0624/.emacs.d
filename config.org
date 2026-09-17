@@ -531,9 +531,12 @@ Signal an error if the entire string was not used."
                           (registers . 5)))
   (defun dashboard ()
     (interactive)
-    (switch-to-buffer dashboard-buffer-name)
+    (dashboard-open)
     (delete-other-windows))
+
   (dashboard-setup-startup-hook)
+  (setq initial-buffer-choice
+        (lambda () (dashboard-open) (get-buffer dashboard-buffer-name)))
 
   (miao-leader-define-keys
     '("d d" . dashboard)))
@@ -1964,6 +1967,7 @@ two concept names that disagree."
   :init
   (setq org-directory "~/Project/org/")
   (setq org-agenda-files `(,(concat org-directory "todo.org") ,(concat org-directory "Calendar.org")))
+  (setq org-agenda-skip-unavailable-files t)
   (setq org-default-notes-file (concat org-directory "notes.org"))
 
   (org-babel-do-load-languages
