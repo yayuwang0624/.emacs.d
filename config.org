@@ -2803,6 +2803,70 @@ variable `project-local-identifier' to be considered a project."
                           (list #'project-try-vc
                                 #'project-local-try-local))
 
+  (defvar project-tramp-method-aliases nil
+    "Alist of (OLD-METHOD . NEW-METHOD) Tramp methods to treat as one.")
+
+  (defun project--collapse-dots (name)
+    "Remove \"/./\" and doubled slashes from NAME."
+    (while (string-match "/\\(?:\\./\\|/\\)" name)
+      (setq name (replace-match "/" t t name)))
+    name)
+
+  (defun project--remote-home (vec)
+    "Remote home directory for VEC, without opening a connection for it."
+    (if (let ((non-essential t)) (tramp-connectable-p vec))
+        (tramp-get-home-directory vec)
+      (tramp-get-connection-property vec "~")))
+
+  (defun project-canonical-dir (dir)
+    "Return the canonical spelling of DIR for `project--list'."
+    (let ((dir (file-name-as-directory dir)))
+      (if (not (and (file-remote-p dir) (fboundp 'tramp-dissect-file-name)))
+          (abbreviate-file-name (expand-file-name (project--collapse-dots dir)))
+        (condition-case nil
+            (let* ((vec (tramp-dissect-file-name dir))
+                   (home (project--remote-home vec))
+                   (localname (project--collapse-dots
+                               (tramp-file-name-localname vec)))
+                   (alias (assoc-default (tramp-file-name-method vec)
+                                         project-tramp-method-aliases)))
+              (when (and home (not (string-prefix-p "~" localname))
+                         (string-prefix-p (file-name-as-directory home) localname))
+                (setq localname
+                      (concat "~/" (substring
+                                    localname
+                                    (length (file-name-as-directory home))))))
+              (when alias (setf (tramp-file-name-method vec) alias))
+              (tramp-make-tramp-file-name vec localname))
+          (error dir)))))
+
+  (defun project--canonicalize-remembered-dir (args)
+    (cons (project-canonical-dir (car args)) (cdr args)))
+  (advice-add 'project--remember-dir :filter-args
+              #'project--canonicalize-remembered-dir)
+
+  (defun project--dedupe-list (&rest _)
+    "Canonicalize and deduplicate `project--list', keeping its order."
+    (when (consp project--list)
+      (let ((seen (make-hash-table :test #'equal))
+            kept)
+        (dolist (ent project--list)
+          (let ((dir (project-canonical-dir (car ent))))
+            (unless (gethash dir seen)
+              (puthash dir t seen)
+              (push (cons dir (cdr ent)) kept))))
+        (setq project--list (nreverse kept)))))
+  (advice-add 'project--write-project-list :before #'project--dedupe-list)
+
+  (defun project-dedupe-list ()
+    "Fold duplicate spellings of the same root out of the project list."
+    (interactive)
+    (project--ensure-read-project-list)
+    (let ((before (length project--list)))
+      (project--dedupe-list)
+      (project--write-project-list)
+      (message "Project list: %d -> %d" before (length project--list))))
+
   (miao-leader-define-keys
    '("p p" . project-switch-project)
    '("p f" . project-find-file)
