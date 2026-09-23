@@ -2899,6 +2899,11 @@ variable `project-local-identifier' to be considered a project."
   (setq persp-save-dir (expand-file-name "persp-confs/" user-emacs-directory))
   (setq persp-load-buffer-handle-missing-file-functions
         (list (lambda (_savelist) 'skip)))
+  (defun persp-skip-dead-frame-lighter (orig frame parameter value)
+    "Call ORIG unless PARAMETER is `persp-lighter' and FRAME is dead."
+    (unless (and (eq parameter 'persp-lighter) frame (not (frame-live-p frame)))
+      (funcall orig frame parameter value)))
+  (advice-add 'set-frame-parameter :around #'persp-skip-dead-frame-lighter)
 
   ;; FIXME
   (defun treemacs--remove-treemacs-window-in-new-frames (location-type _frame-or-window _persp)
@@ -3021,7 +3026,7 @@ variable `project-local-identifier' to be considered a project."
   '("f p" . open-config-file)
   '("f P" . open-config-persp)
   ;; '("w b" . persp-scratch-buffer)
-  '("TAB s" . persp-switch)
+  '("TAB TAB" . persp-switch)
   '("TAB p" . persp-prev)
   '("TAB n" . persp-next)
   '("TAB SPC" . persp-switch)
@@ -3033,7 +3038,7 @@ variable `project-local-identifier' to be considered a project."
   '("TAB k" . persp-move-right)
   '("TAB h" . persp-prev)
   '("TAB l" . persp-next)
-  '("TAB TAB" . persp-show-persps)
+  '("TAB s" . persp-show-persps)
   '("TAB b" . persp-switch-to-buffer)
   '("," . persp-switch-to-buffer)
   '("TAB d" . persp-kill)
