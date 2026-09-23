@@ -2487,13 +2487,64 @@ two concept names that disagree."
    '("n o" . org-noter)))
 #+end_src
 
+** alert
+#+begin_src emacs-lisp
+(with-eval-after-load 'alert
+  (setq alert-default-style 'libnotify)
+
+  (defvar org-notify-ids (make-hash-table :test #'equal)
+    "Map from a notification message to the notify-send id showing it.")
+
+  (defun org-notify-send (info)
+    "Show INFO with notify-send."
+    (let* ((text (plist-get info :message))
+           (marker (plist-get info :data))
+           (id (gethash text org-notify-ids)))
+      (make-process
+       :name "org-notify-send"
+       :noquery t
+       :command (append (list "notify-send"
+                              "--app-name" "Emacs"
+                              "--urgency" "normal"
+                              "--print-id"
+                              "--expire-time"
+                              (number-to-string
+                               (if (plist-get info :persistent)
+                                   0
+                                 (* 1000 alert-fade-time))))
+                        (and (markerp marker)
+                             (list "--action" "default=Open in Emacs"))
+                        (and id (list "--replace-id" id))
+                        (list (plist-get info :title) text))
+       :filter
+       (lambda (_process output)
+         (dolist (line (split-string output "\n" t))
+           (if (string-match-p "\\`[0-9]+\\'" line)
+               (puthash text line org-notify-ids)
+             (when (and (string= line "default") (markerp marker))
+               (remhash text org-notify-ids)
+               (org-goto-marker-or-bmk marker)
+               (select-frame-set-input-focus (selected-frame)))))))))
+
+  (alert-define-style 'org-notify
+                      :title "Org notification with a jump action"
+                      :notifier #'org-notify-send))
+#+end_src
+
 ** org-alert
 #+begin_src emacs-lisp
 (use-package org-alert
   :ensure t
   :after org-agenda
   :config
-  (setq alert-default-style 'libnotify)
+  (defun org-alert-alert-args (args)
+    "Give org-alert's own `alert' calls in ARGS their style and entry marker."
+    (if (eq (plist-get (cdr args) :category) org-alert-notification-category)
+        (append args (list :style 'org-notify
+                           :data (point-marker)
+                           :persistent t))
+      args))
+  (advice-add 'alert :filter-args #'org-alert-alert-args)
   (setq org-alert-interval 300
         org-alert-notify-cutoff 10
         org-alert-notify-after-event-cutoff 10
