@@ -3438,37 +3438,135 @@ Move to the previous message when BACKWARDS is non-nil."
 
 * calendar
 
-** calw
+** calfw
 #+begin_src emacs-lisp
 (use-package calfw
   :ensure t
   :config
-  (use-package calfw-org
-    :ensure t)
-  (setq calendar-week-start-day 0)
-  (setq calfw-fchar-junction ?╋
-      calfw-fchar-vertical-line ?┃
-      calfw-fchar-horizontal-line ?━
-      calfw-fchar-left-junction ?┣
-      calfw-fchar-right-junction ?┫
-      calfw-fchar-top-junction ?┯
-      calfw-fchar-top-left-corner ?┏
-      calfw-fchar-top-right-corner ?┓)
+  (setq calendar-week-start-day 0
+        calfw-fchar-junction ?╋
+        calfw-fchar-vertical-line ?┃
+        calfw-fchar-horizontal-line ?━
+        calfw-fchar-left-junction ?┣
+        calfw-fchar-right-junction ?┫
+        calfw-fchar-top-junction ?┯
+        calfw-fchar-top-left-corner ?┏
+        calfw-fchar-top-right-corner ?┓)
   (unbind-key "C-v" calfw-calendar-mode-map)
-  (unbind-key "M-v" calfw-calendar-mode-map))
+  (unbind-key "M-v" calfw-calendar-mode-map)
+  (add-to-list 'miao-bypass-mode-list 'calfw-calendar-mode)
+  (add-hook 'calfw-calendar-mode-hook #'miao-global-mode-enable-in-buffer))
+
+(use-package calfw-org
+  :ensure t
+  :after calfw)
 
 (use-package calfw-blocks
   :ensure nil
   :vc (:url "https://github.com/haji-ali/calfw-blocks" :rev "87937b7c7523b6d314bf9e21310924c94f182954")
+  :after calfw-org
   :config
+  (setq calfw-blocks-lines-per-hour 2
+        calfw-blocks-event-keymap calfw-org-text-keymap)
+
+  (defun calfw-blocks-event-hour-range (model)
+    "Return (FIRST . LAST), the hours covered by the timed events in MODEL."
+    (let ((first 23) (last 0))
+      (dolist (day (calfw--k 'contents model))
+        (dolist (event (cdr day))
+          (when-let* ((start (and (calfw-event-p event) (calfw-event-start-time event))))
+            (let* ((end (calfw-event-end-time event))
+                   (end (if (or (null end) (equal end start))
+                            (list (+ (car start) calfw-blocks-default-event-length) (cadr start))
+                          end)))
+              (setq first (min first (car start))
+                    last (max last (+ (car end) (ceiling (cadr end) 60) -1)))))))
+      (cons first last)))
+
+  (define-advice calfw-blocks-render-calendar-cells-days (:around (fn model &rest args) fit-events)
+    "Give full height only to the hours that have events."
+    (let ((calfw-blocks-nonshrinking-hours (calfw-blocks-event-hour-range model)))
+      (apply fn model args)))
+
+  (define-advice calfw-blocks--get-block-vertical-position (:around (fn date event) skip-untimed)
+    "Return a whole-hour position for an EVENT with no start time."
+    (if (calfw-event-start-time event)
+        (funcall fn date event)
+      (list 0 -1)))
+
+  (define-advice calfw-blocks-compare-time (:around (fn t1 t2) untimed-first)
+    "Order a nil time in T1 or T2 before any real time."
+    (cond ((and t1 t2) (funcall fn t1 t2))
+          ((equal t1 t2) 0)
+          (t1 -1)
+          (t +1)))
+
+  (defun calfw-blocks-show-from-top (&rest _)
+    "Scroll to the first line when the whole calendar fits in the window."
+    (when (<= (count-screen-lines (point-min) (point-max)) (window-body-height))
+      (set-window-start nil (point-min))))
+
+  (dolist (command '(calfw-blocks-navi-goto-now calfw-blocks-navi-goto-next-event))
+    (advice-add command :after #'calfw-blocks-show-from-top))
+
+  (defun org-agenda-calfw-event (item line)
+    "Make a `calfw-event' from the org agenda ITEM and its display text LINE."
+    (let* ((time-of-day (get-text-property 0 'time-of-day item))
+           (start (and time-of-day (list (/ time-of-day 100) (% time-of-day 100))))
+           (minutes (and start (+ (* 60 (car start)) (cadr start)
+                                  (round (or (get-text-property 0 'duration item) 0))))))
+      (make-calfw-event
+       :title (if start (substring line 6) line)
+       :start-date (get-text-property 0 'date item)
+       :start-time start
+       :end-time (and start (list (/ minutes 60) (% minutes 60))))))
+
+  (defun org-agenda-calfw-data (files begin end)
+    "Return the org agenda entries of FILES between BEGIN and END as calfw events."
+    (cl-loop with periods = nil
+             for item in (calfw-org--collect-schedules-period files begin end)
+             for date = (get-text-property 0 'date item)
+             for line = (calfw-org-summary-format item)
+             for range = (calfw-org-get-timerange line (and (equal date begin) date))
+             if range do (cl-pushnew range periods :test #'equal)
+             else if (get-text-property 0 'dotime item)
+             collect (org-agenda-calfw-event item line) into events
+             finally return (cons (cons 'periods periods) events)))
+
+  (defun org-agenda-calfw-source (file color)
+    "Return a calfw source for the org agenda entries of FILE in COLOR."
+    (make-calfw-source
+     :name (file-name-base file)
+     :color color
+     :data (lambda (begin end) (org-agenda-calfw-data (list file) begin end))))
+
+  (defun org-agenda-calfw-date-at-point ()
+    "Return the date of the org agenda line at point, or nil elsewhere."
+    (when-let* ((day (and (derived-mode-p 'org-agenda-mode) (org-get-at-bol 'day))))
+      (calendar-gregorian-from-absolute day)))
+
+  (defvar org-agenda-calfw-map
+    (calfw--define-keymap
+     '(("q" . quit-window)
+       ("a" . calfw-org-open-agenda-day)
+       ("." . calfw-blocks-navi-goto-now)
+       ("n" . calfw-blocks-navi-next-view-command)
+       ("p" . calfw-blocks-navi-previous-view-command)))
+    "Keys added to the org agenda block calendar.")
+
   (defun open-calendar-agenda ()
+    "Show the org agenda files as time blocks, one week per screen."
     (interactive)
     (calfw-open-calendar-buffer
+     :date (org-agenda-calfw-date-at-point)
+     :view 'block-week
+     :sorter #'calfw-blocks-default-sorter
+     :custom-map org-agenda-calfw-map
      :contents-sources
-     (list
-      (calfw-org-create-source nil "org-agenda" "medium purple"))
-     :view 'block-week))
-  (setq calfw-blocks-lines-per-hour 2)
+     (list (org-agenda-calfw-source org-calendar-file "medium purple")
+           (org-agenda-calfw-source org-todo-file "sea green")
+           (org-agenda-calfw-source org-notes-file "dim gray"))))
+
   (miao-leader-define-keys
    '("c a" . open-calendar-agenda)))
 #+end_src
