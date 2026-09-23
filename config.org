@@ -1246,8 +1246,89 @@ Signal an error if the entire string was not used."
 
 ** proof-general
 #+begin_src emacs-lisp
+(setq switch-to-buffer-in-dedicated-window 'pop)
+
 (use-package proof-general
-  :ensure t)
+  :ensure t
+  :custom
+  (coq-show-proof-stepwise t)
+  (proof-three-window-mode-policy 'hybrid))
+#+end_src
+
+** rocq-mode
+#+begin_src emacs-lisp
+(use-package rocq-mode
+  :vc (:url "https://codeberg.org/jpoiret/rocq-mode.el.git" :rev :newest)
+  :mode "\\.v\\'"
+  :hook ((rocq-mode . rocq-follow-viewport-mode)
+         (rocq-mode . rocq-auto-goals-at-point-mode)
+         (rocq-mode . rocq-enable-qualified-completion))
+  :custom (rocq-top-goal t)
+  :custom-face
+  (rocq-mode-last-request ((t :background "#3e493e")))
+  (rocq-mode-processing-face ((t :background "#3f444a")))
+  :preface
+  (defvar rocq-bin-dir (expand-file-name "~/.opam/rocq-lsp-9.2/bin"))
+
+  (defvar rocq-qualified-cache (make-hash-table :test #'equal))
+
+  (defun rocq-buffer-requires ()
+    (save-excursion
+      (goto-char (point-min))
+      (let (lines)
+        (while (re-search-forward
+                "^[ \t]*\\(?:From[ \t]+[^ \t\n]+[ \t]+\\)?Require[^.]*\\(?:\\.[^ \t\n][^.]*\\)*\\.[ \t]*$"
+                nil t)
+          (push (match-string-no-properties 0) lines))
+        (string-join (nreverse lines) "\n"))))
+
+  (defun rocq-module-members (module)
+    (let* ((requires (rocq-buffer-requires))
+           (key (cons module requires)))
+      (or (gethash key rocq-qualified-cache)
+          (puthash key (rocq-search-inside module requires) rocq-qualified-cache))))
+
+  (defun rocq-search-inside (module requires)
+    (let* ((dir (make-temp-file "rocq_complete" t))
+           (file (expand-file-name "Query.v" dir))
+           members)
+      (unwind-protect
+          (with-temp-buffer
+            (write-region (format "%s\nSearch _ inside %s.\n" requires module) nil file nil 'silent)
+            (call-process (expand-file-name "rocq" rocq-bin-dir) nil t nil "c" file)
+            (goto-char (point-min))
+            (while (re-search-forward
+                    "^\\(?:[A-Za-z0-9_']+\\.\\)*\\([A-Za-z0-9_']+\\):\\(\\(?:.\\|\n[ \t]\\)*\\)" nil t)
+              (push (propertize (match-string-no-properties 1)
+                                'rocq-type (string-trim
+                                            (replace-regexp-in-string
+                                             "[ \t\n]+" " " (match-string-no-properties 2))))
+                    members)))
+        (delete-directory dir t))
+      (delete-dups (nreverse members))))
+
+  (defun rocq-qualified-capf ()
+    (when (looking-back "\\_<\\([A-Z][A-Za-z0-9_']*\\(?:\\.[A-Z][A-Za-z0-9_']*\\)*\\)\\.\\([A-Za-z0-9_']*\\)"
+                        (line-beginning-position))
+      (let ((module (match-string-no-properties 1))
+            (start (match-beginning 2)))
+        (list start (point)
+              (completion-table-dynamic
+               (lambda (_) (rocq-module-members module)))
+              :annotation-function
+              (lambda (candidate)
+                (when-let* ((type (get-text-property 0 'rocq-type candidate)))
+                  (concat " : " type)))
+              :exclusive 'no))))
+
+  (defun rocq-enable-qualified-completion ()
+    (add-hook 'completion-at-point-functions #'rocq-qualified-capf -50 t))
+
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 `(rocq-mode rocq--lsp-server
+                             ,(expand-file-name "coq-lsp" rocq-bin-dir)))))
 #+end_src
 
 ** JavaScript/Typescript
