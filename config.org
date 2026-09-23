@@ -3576,25 +3576,94 @@ Move to the previous message when BACKWARDS is non-nil."
 #+begin_src emacs-lisp
 (use-package org-gcal
   :ensure t
-  :init
-  (setq org-gcal-client-id ""
-      org-gcal-client-secret ""
-      org-gcal-fetch-file-alist `(("st.saint.wyy@gmail.com" . ,(concat org-directory "Calendar.org"))))
-  :config
-  (setq org-gcal-recurring-events-mode 'nested)
-  (setq plstore-cache-passphrase-for-symmetric-encryption t)
-  (setq org-gcal-up-days 1
-        org-gcal-down-days 14)
-  (add-to-list 'plstore-encrypt-to '"BE9945C2FDE35D11")
+  :defer t
+  :preface
+  (defun org-gcal-load ()
+    "Read the OAuth client from `auth-sources', then load org-gcal."
+    (unless (featurep 'org-gcal)
+      (let ((auth (car (auth-source-search :host "org-gcal"))))
+        (setq org-gcal-client-id (plist-get auth :user)
+              org-gcal-client-secret (auth-info-password auth)))
+      (require 'org-gcal)))
 
   (defun org-calendar ()
+    "Open the calendar file and sync it with Google Calendar."
     (interactive)
-    (let ((calendar-file (concat org-directory "Calendar.org")))
-      (find-file calendar-file)
-      (org-gcal-sync)))
+    (org-gcal-load)
+    (open-org-persp)
+    (find-file org-calendar-file)
+    (org-gcal-sync))
 
+  (defun org-gcal-post-new-event ()
+    "Push the heading at point to the first calendar in `org-gcal-fetch-file-alist'."
+    (interactive)
+    (org-gcal-load)
+    (when (and (equal buffer-file-name (expand-file-name org-calendar-file))
+               (not (org-gcal--get-id (point))))
+      (org-entry-put (point) org-gcal-calendar-id-property (caar org-gcal-fetch-file-alist))
+      (org-gcal-post-at-point)))
+
+  (defun org-gcal-post-captured-event ()
+    "Push the event that `org-capture' just stored to Google Calendar."
+    (unless org-note-abort
+      (org-with-point-at org-capture-last-stored-marker
+        (org-gcal-post-new-event))))
+
+  :init
+  (setq org-gcal-fetch-file-alist
+        `(("st.saint.wyy@gmail.com" . ,org-calendar-file)
+          ("1otkthaclt5l8hlvm4t51j1ugdad35jq@import.calendar.google.com" . ,org-calendar-file)))
   (miao-leader-define-keys
-   '("n c" . org-calendar)))
+   '("c c" . org-calendar))
+  :config
+  (setq org-gcal-recurring-events-mode 'nested
+        org-gcal-auto-archive nil
+        org-gcal-up-days 7
+        org-gcal-down-days 60
+        org-gcal-notify-p nil
+        org-gcal-remove-api-cancelled-events t
+        plstore-cache-passphrase-for-symmetric-encryption t
+        request-message-level -1)
+  (add-to-list 'plstore-encrypt-to "BE9945C2FDE35D11")
+  (run-at-time 1800 1800 #'org-gcal-fetch)
+
+  (with-eval-after-load 'org-capture
+    (remove-hook 'org-capture-after-finalize-hook #'org-gcal--capture-post))
+  (with-eval-after-load 'org-refile
+    (remove-hook 'org-after-refile-insert-hook #'org-gcal--refile-post)
+    (add-hook 'org-after-refile-insert-hook #'org-gcal-post-new-event))
+
+  (define-advice org-gcal-sync (:before (&rest _) archive-past-events)
+    "Archive events that ended more than `org-gcal-up-days' ago."
+    (let ((cutoff (time-subtract nil (days-to-time org-gcal-up-days))))
+      (with-current-buffer (find-file-noselect org-calendar-file)
+        (org-map-entries
+         (lambda ()
+           (let ((ts (org-entry-get nil "TIMESTAMP")))
+             (when (and ts
+                        (org-gcal--get-id (point))
+                        (not (org-entry-get nil "recurrence"))
+                        (time-less-p (org-timestamp-to-time (org-timestamp-from-string ts) t)
+                                     cutoff))
+               (org-archive-subtree)
+               (setq org-map-continue-from (point)))))
+         nil 'file)
+        (when (buffer-modified-p)
+          (save-buffer)))))
+
+  (define-advice org-generic-id-update-id-locations (:around (orig &rest args) calendar-file-only)
+    "Scan only `org-calendar-file' for event IDs, and do it quietly."
+    (let ((org-agenda-files (list org-calendar-file))
+          (org-agenda-text-search-extra-files nil)
+          (org-generic-id-search-archives nil)
+          (inhibit-message t)
+          (message-log-max nil))
+      (apply orig args)))
+
+  (define-advice oauth2-auto--plstore-read (:around (orig username provider) memory-cache)
+    "Serve OAuth tokens from memory after the first decrypt of the session."
+    (or (gethash (oauth2-auto--compute-id username provider) oauth2-auto--plstore-cache)
+        (funcall orig username provider))))
 #+end_src
 
 
