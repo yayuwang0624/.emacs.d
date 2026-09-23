@@ -1171,6 +1171,35 @@ Signal an error if the entire string was not used."
   (setq lsp-ltex-version "16.0.0"))
 #+end_src
 
+** citre
+#+begin_src emacs-lisp
+(use-package citre
+  :ensure t
+  :defer t
+  :init
+  (require 'citre-config)
+  (setenv "GTAGSCONF" "/usr/share/gtags/gtags.conf")
+  (setenv "GTAGSLABEL" "native-pygments")
+  (setenv "GTAGSOBJDIRPREFIX" (expand-file-name "~/.cache/gtags"))
+
+  :custom
+  (citre-default-create-tags-file-location 'global-cache)
+  (citre-edit-ctags-options-manually nil)
+  (citre-auto-enable-citre-mode-modes '(prog-mode))
+  (citre-find-definition-backends '(tags global))
+  (citre-find-reference-backends '(global))
+  (citre-completion-backends '(tags global))
+  :config
+  (define-advice citre-auto-enable-citre-mode (:around (fn) skip-lsp-buffers)
+    (unless (bound-and-true-p lsp-mode)
+      (funcall fn)))
+  (miao-leader-define-major-keys '(c-mode c++-mode python-mode js-mode typescript-mode)
+    '("c t d" . citre-jump)
+    '("c t r" . citre-jump-to-reference)
+    '("c t b" . citre-jump-back)))
+#+end_src
+
+
 * language
 ** treesit
 #+begin_src emacs-lisp
