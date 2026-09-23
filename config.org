@@ -643,18 +643,29 @@ Signal an error if the entire string was not used."
 
 (use-package dogears
   :ensure nil
-  :load-path "~/Project/dogears/"
-  ;; These bindings are optional, of course:
+  :load-path "~/Project/dogears.el/"
+  :preface
+  (defun dogears-within-heading-or-function ()
+    "Return the Org outline path at point, or the enclosing function elsewhere."
+    (if (derived-mode-p 'org-mode)
+        (when-let* ((path (ignore-errors (org-get-outline-path t t))))
+          (string-join path "/"))
+      (dogears--which-function)))
   :config
-  (setq dogears-functions
-        (append
-         dogears-functions
-         '(miao-cursor-blink miao-leader-mode
-                             lsp-find-definition
-                             lsp-find-references
-                             consult-imenu
-                             consult-ripgrep
-                             consult-line)))
+  (setq dogears-within-function #'dogears-within-heading-or-function
+        dogears-idle 30
+        dogears-position-delta 400)
+  (dolist (fn '(miao-cursor-blink
+                lsp-find-definition
+                lsp-find-references
+                xref-find-definitions
+                xref-go-back
+                org-open-at-point
+                org-agenda-switch-to
+                consult-imenu
+                consult-ripgrep
+                consult-line))
+    (add-to-list 'dogears-functions fn))
   (dogears-mode t)
   (miao-define-keys 'leader
     '("s m" . consult-dogears))
@@ -1862,41 +1873,89 @@ two concept names that disagree."
   (setq consult-preview-key 'any
         consult-narrow-key "<")
 
-  (defvar consult--source-dogears
-    `(
-      :name     "Dogears"
-      :narrow   ?d
-      :category 'dogears
-      :items    (lambda ()
-                  (mapcar
-                   (lambda (place)
-                     (propertize (dogears--format-record place)
-                                 'consult--candidate place))
-                   dogears-list))
-      :action   ,#'consult--dogears-jump
-      :state    ,#'consult--dogears-state))
+  (defun consult--dogears-marker (record)
+    "Return a marker at RECORD's position, or nil when its buffer is gone."
+    (pcase-let (((map buffer position) (cdr record)))
+      (when-let* ((buf (and buffer (get-buffer buffer)))
+                  ((buffer-live-p buf))
+                  (position))
+        (with-current-buffer buf
+          (save-restriction
+            (widen)
+            (copy-marker (max (point-min) (min position (point-max)))))))))
+
+  (defun consult--dogears-line-number (record)
+    "Return RECORD's line number as a string, falling back to its position."
+    (pcase-let (((map buffer position) (cdr record)))
+      (cond ((null position) "")
+            ((when-let* ((buf (and buffer (get-buffer buffer))))
+               (with-current-buffer buf
+                 (save-restriction
+                   (widen)
+                   (number-to-string
+                    (line-number-at-pos (min position (point-max))))))))
+            (t (number-to-string position)))))
+
+  (defun consult--dogears-candidate (record)
+    "Format RECORD as a completion candidate carrying RECORD as a text property."
+    (pcase-let* ((`(,name . ,(map buffer filename within line manualp)) record)
+                 (title (cond ((stringp buffer) buffer)
+                              ((bufferp buffer) (buffer-name buffer))
+                              (filename (file-name-nondirectory filename))
+                              (t name)))
+                 (line (string-trim (or line "")))
+                 (within (substring-no-properties (or within ""))))
+      (propertize
+       (concat
+        (if manualp "✓ " "  ")
+        (propertize (truncate-string-to-width title 24 nil ?\s "…")
+                    'face 'consult-buffer)
+        " "
+        (propertize (format "%5s" (consult--dogears-line-number record))
+                    'face 'consult-line-number)
+        "  "
+        (propertize (truncate-string-to-width within 30 nil ?\s "…")
+                    'face 'font-lock-function-name-face)
+        "  "
+        (truncate-string-to-width line 60 nil nil "…"))
+       'consult--candidate record)))
+
+  (defun consult--dogears-annotate (origin)
+    "Return an annotation function that judges relevance from buffer ORIGIN."
+    (lambda (cand)
+      (when-let* ((record (get-text-property 0 'consult--candidate cand))
+                  (mode (map-elt (cdr record) 'mode)))
+        (consult--annotate-align
+         cand
+         (concat
+          (propertize (format "%-10s" (with-current-buffer origin
+                                        (dogears--relevance record)))
+                      'face 'consult-key)
+          " "
+          (propertize (string-remove-suffix "-mode" (symbol-name mode))
+                      'face 'font-lock-type-face))))))
 
   (defun consult--dogears-state ()
-    (consult--state-with-return
-     (consult--dogears-preview)
-     #'consult--dogears-jump))
-
-  (defun consult--dogears-preview ()
+    "Return a preview function for dogears records."
+    (let ((preview (consult--jump-preview)))
       (lambda (action cand)
-        (when cand
-          (consult--dogears-jump cand))))
-
-  (defun consult--dogears-jump (cand)
-    (when cand
-        (let* ((dogear (get-text-property 0 'consult--candidate cand))
-               (buffer (get-buffer (cdr (assoc 'buffer dogear))))
-               (pos (cdr (assoc 'position dogear))))
-          (switch-to-buffer buffer)
-          (goto-char pos))))
+        (funcall preview action
+                 (and (eq action 'preview) cand (consult--dogears-marker cand))))))
 
   (defun consult-dogears ()
+    "Jump to a dogeared place, most recent first, with live preview."
     (interactive)
-    (consult--multi '(consult--source-dogears) :sort nil))
+    (unless dogears-list
+      (user-error "Dogears: nothing remembered yet"))
+    (dogears-go
+     (consult--read (mapcar #'consult--dogears-candidate dogears-list)
+                    :prompt "Dogear: "
+                    :category 'dogears
+                    :require-match t
+                    :sort nil
+                    :lookup #'consult--lookup-candidate
+                    :annotate (consult--dogears-annotate (current-buffer))
+                    :state (consult--dogears-state))))
 
   (consult-customize
    consult-theme consult-ripgrep consult-git-grep consult-grep
