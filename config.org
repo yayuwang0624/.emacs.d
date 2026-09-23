@@ -1490,7 +1490,39 @@ Signal an error if the entire string was not used."
   (advice-add #'completing-read-multiple :filter-args #'crm-indicator)
 
   (vertico-multiform-mode)
-  (vertico-mode))
+  (vertico-mode)
+  :config
+  (require 'vertico-repeat)
+  (setq vertico-repeat-filter '(vertico-repeat vertico-repeat-select))
+  (setq vertico-repeat-transformers
+        (list #'vertico-repeat--filter-commands #'vertico-repeat--remove-long))
+  (add-hook 'minibuffer-setup-hook #'vertico-repeat-save)
+  (with-eval-after-load 'savehist
+    (add-to-list 'savehist-additional-variables 'vertico-repeat-history))
+
+  (defvar vertico-repeat--history-backup nil
+    "History variables and their values from before the last Vertico session.")
+
+  (defun vertico-repeat--backup-history ()
+    "Snapshot the history variables that Vertico uses for sorting."
+    (setq vertico-repeat--history-backup
+          (mapcar (lambda (var) (cons var (symbol-value var)))
+                  '(minibuffer-history extended-command-history face-name-history))))
+  (add-hook 'minibuffer-setup-hook #'vertico-repeat--backup-history)
+
+  (define-advice vertico-repeat (:around (orig &rest args) preserve-order)
+    (let ((minibuffer-history (alist-get 'minibuffer-history vertico-repeat--history-backup))
+          (extended-command-history (alist-get 'extended-command-history vertico-repeat--history-backup))
+          (face-name-history (alist-get 'face-name-history vertico-repeat--history-backup))
+          (consult-async-split-styles-alist
+           (and (featurep 'consult)
+                (mapcar (lambda (style)
+                          (cons (car style) (consult--plist-remove '(:initial) (cdr style))))
+                        consult-async-split-styles-alist))))
+      (apply orig args)))
+
+  (miao-leader-define-keys
+    '("'" . vertico-repeat)))
 
 (use-package savehist
   :init
