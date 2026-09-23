@@ -2579,15 +2579,59 @@ two concept names that disagree."
         org-pomodoro-overtime-sound org-pomodoro-bell-sound
         org-pomodoro-long-break-sound org-pomodoro-bell-sound
         org-pomodoro-short-break-sound org-pomodoro-bell-sound
-        org-pomodoro-overtime-sound org-pomodoro-bell-sound
         org-pomodoro-overtime-sound-args nil
         org-pomodoro-start-sound-args nil
         org-pomodoro-ticking-sound-args nil
         org-pomodoro-finished-sound-args nil
         org-pomodoro-long-break-sound-args nil
-        org-pomodoro-short-break-sound-args nil)
+        org-pomodoro-short-break-sound-args nil
+        org-pomodoro-keep-killed-pomodoro-time 't)
+
+  (defvar org-pomodoro-task-marker nil
+    "Marker of the entry the current pomodoro clocks.")
+
+  (defun org-pomodoro-remember-task ()
+    "Record the clocked entry in `org-pomodoro-task-marker'."
+    (setq org-pomodoro-task-marker
+          (and (markerp org-clock-hd-marker)
+               (marker-buffer org-clock-hd-marker)
+               (copy-marker org-clock-hd-marker))))
+  (add-hook 'org-pomodoro-started-hook #'org-pomodoro-remember-task)
+
+  (defun org-pomodoro-alert-args (args)
+    "Give org-pomodoro's own `alert' calls in ARGS a jump to the clocked entry."
+    (if (eq (plist-get (cdr args) :category) 'org-pomodoro)
+        (append args (list :style 'org-notify :data org-pomodoro-task-marker))
+      args))
+  (advice-add 'alert :filter-args #'org-pomodoro-alert-args)
+
+  (defun org-pomodoro-goto-task ()
+    "Go to the entry the current or last pomodoro clocks."
+    (interactive)
+    (cond ((org-clocking-p) (org-clock-goto))
+          ((markerp org-pomodoro-task-marker)
+           (org-goto-marker-or-bmk org-pomodoro-task-marker))
+          (t (message "No pomodoro task to go to."))))
+
+  (defun org-pomodoro-dwim (&optional arg)
+    "Start a pomodoro, go back to its task, or report the break left.
+With a prefix ARG kill the active timer."
+    (interactive "P")
+    (cond
+     ((and arg (org-pomodoro-active-p))
+      (org-pomodoro-kill))
+     ((eq org-pomodoro-state :pomodoro)
+      (org-pomodoro-goto-task)
+      (message "%s left in this pomodoro." (org-pomodoro-format-seconds)))
+     ((memq org-pomodoro-state '(:short-break :long-break))
+      (org-pomodoro-goto-task)
+      (message "%s left of your break." (org-pomodoro-format-seconds)))
+     (t
+      (let ((current-prefix-arg arg))
+        (call-interactively #'org-pomodoro)))))
+
   (miao-leader-define-keys
-   '("n p" . org-pomodoro)))
+   '("n p" . org-pomodoro-dwim)))
 #+end_src
 
 ** literate-calc-mode
