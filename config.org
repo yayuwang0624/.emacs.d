@@ -210,11 +210,12 @@ Signal an error if the entire string was not used."
 
 (save-place-mode t)
 
+(setq recentf-max-saved-items nil
+      recentf-auto-cleanup 'never)
+
 (recentf-mode t)
 
 (setq confirm-kill-emacs 'y-or-n-p)
-
-(setq recentf-max-saved-items nil)
 
 (defun recentf-merge-before-save (orig-fun &rest args)
   (let ((current recentf-list))
