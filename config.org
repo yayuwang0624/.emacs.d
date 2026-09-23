@@ -2283,10 +2283,10 @@ two concept names that disagree."
   (setq org-capture-templates
         `(("t" "Todo" entry (file+headline ,org-todo-file "Capture")
            "* TODO %?\n%U\n" :empty-lines-after 1)
-          ("T" "Todo with link to here" entry (file+headline ,org-todo-file "Capture")
+          ("T" "Todo with link to here" entry (file+headline ,org-todo-file "Research")
            "* TODO %?\n%U\n%a\n" :empty-lines-after 1)
           ("e" "Event, pushed to Google Calendar" entry (file ,org-calendar-file)
-           "* %^{Event}\n:PROPERTIES:\n:calendar-id: st.saint.wyy@gmail.com\n:END:\n:org-gcal:\n%^T\n%?\n:END:"
+           "* %^{Event}\n:org-gcal:\n%^T\n%?\n:END:"
            :empty-lines-after 1 :after-finalize org-gcal-post-captured-event)
           ("m" "Meeting note" entry (file ,org-notes-file)
            "* <%<%Y-%m-%d %a>> %^{Meeting}\n%?" :empty-lines-after 1)
@@ -2315,7 +2315,7 @@ two concept names that disagree."
     '("t i" . org-toggle-inline-images)
     '("t l" . org-latex-preview))
   (miao-leader-define-keys
-      '("n C" . org-capture)
+      '("n c" . org-capture)
       '("n L" . org-store-link)))
 #+end_src
 
@@ -2391,7 +2391,7 @@ two concept names that disagree."
                                  (search . "  %i "))
       org-agenda-scheduled-leaders '("" "Sched. %dx ")
       org-agenda-deadline-leaders '("Due " "In %d d. " "%d d. ago ")
-      org-agenda-todo-keyword-format "%-6s"
+      org-agenda-todo-keyword-format "%s"
       org-agenda-time-leading-zero t
       org-agenda-category-icon-alist
       `(("Calendar" ,(list (nerd-icons-mdicon "nf-md-calendar")) nil nil :ascent center)
