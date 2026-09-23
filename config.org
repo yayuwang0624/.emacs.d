@@ -690,7 +690,8 @@ Signal an error if the entire string was not used."
       '("w =" . balance-windows)))
 
 (defun focus-new-window (new-window)
-  (when (window-live-p new-window)
+  (when (and (window-live-p new-window)
+             (memq this-command '(split-window-below split-window-right)))
     (select-window new-window))
   new-window)
 
