@@ -147,7 +147,8 @@ Signal an error if the entire string was not used."
     '("x" . miao-delete-char)
     '("v" . miao-mark-line)
     '("V" . cycle-line-numbers)
-    '("q" . miao-cycle-buffer)
+    '("q" . miao-prev-buffer)
+    '("C-q" . miao-next-buffer)
     '("Q" . miao-delete-window)
     '("w" . miao-mark-word)
     '("W" . miao-mark-symbol)
@@ -164,6 +165,7 @@ Signal an error if the entire string was not used."
     '("M-SPC" . miao-leader))
   (miao-leader-define-keys
     '("b r" . revert-buffer)
+    '("b l" . miao-list-buffers)
     '("f r" . recentf)
     '("f R" . rename-visited-file)
     '("f f" . find-file)
