@@ -2130,7 +2130,36 @@ two concept names that disagree."
     (interactive)
     (consult-ripgrep default-directory))
 
+  (defun bookmark-project-names ()
+    "Names of bookmarks whose file is under the current project root."
+    (bookmark-maybe-load-default-file)
+    (let ((root (expand-file-name (project-root (project-current t)))))
+      (seq-keep (lambda (bm)
+                  (when-let* ((file (bookmark-get-filename bm)))
+                    (and (string-prefix-p root (expand-file-name file)) (car bm))))
+                bookmark-alist)))
+
+  (defun consult-project-bookmark ()
+    "Jump to a bookmark inside the current project."
+    (interactive)
+    (consult--multi `(( :name "Project Bookmark"
+                        :category bookmark
+                        :face consult-bookmark
+                        :history bookmark-history
+                        :items ,#'bookmark-project-names
+                        :state ,#'consult--bookmark-state))
+                    :sort nil))
+
+  (defun bookmark-set-in-project ()
+    "Set a bookmark named after the project and the buffer."
+    (interactive)
+    (bookmark-set (read-string "Bookmark name: "
+                               (format "%s: %s" (project-name (project-current t))
+                                       (bookmark-buffer-name)))))
+
   (miao-define-keys 'leader
+    '("b m" . consult-project-bookmark)
+    '("b M" . bookmark-set-in-project)
     '("s s" . consult-line)
     '("s S" . consult-line-at-point)
     '("s i" . consult-imenu)
