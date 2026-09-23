@@ -3195,7 +3195,7 @@ variable `project-local-identifier' to be considered a project."
 
 
             ("text"
-             (message "text")))))))
+             nil))))))
 
   (defun mu4e~write-body-to-html (msg)
     "Write MSG's body (either html or text) to a temporary file;
@@ -3213,7 +3213,7 @@ return the filename."
         (insert (concat "<strong>To</strong>: "
                         (mu4e~action-header-to-html msg :to) "</br>"))
         (insert (concat "<strong>Date</strong>: "
-                        (format-time-string mu4e-view-date-format (mu4e-message-field msg :date)) "</br>"))
+                        (format-time-string mu4e-date-format-long (mu4e-message-field msg :date)) "</br>"))
         (insert (concat "<strong>Subject</strong>: " (mu4e-message-field msg :subject) "</p>"))
         (insert (or html (concat "<pre>" text "</pre>")))
         (write-file tmpfile)
@@ -3228,9 +3228,7 @@ return the filename."
                       (replace-regexp-in-string "[[:cntrl:]]" "" (car c))))
               (email (when (cdr c)
                        (replace-regexp-in-string "[[:cntrl:]]" "" (cdr c))))
-              (addr (if mu4e-view-show-addresses
-                        (if name (format "%s <%s>" name email) email)
-                      (or name email))) ;; name may be nil
+              (addr (if name (format "%s <%s>" name email) email))
               ;; Escape HTML entities
               (addr (replace-regexp-in-string "&" "&amp;" addr))
               (addr (replace-regexp-in-string "<" "&lt;" addr))
@@ -3254,16 +3252,12 @@ return the filename."
   (setq mu4e-update-interval 60
         mu4e-index-update-error-continue 't
         mu4e-index-update-error-warning 't
-        mu4e-index-update-in-background 't
-        mu4e-html2text-command 'mu4e-shr2text)
+        mu4e-index-update-in-background 't)
 
-  (setq mu4e-headers-include-related nil
-        mu4e-headers-fields '(
-                              (:human-date   . 12)
-                              (:flags        . 10)
-                              (:mailing-list . 15)
-                              (:from-or-to   . 25)
-                              (:subject      . nil)))
+  (setq mu4e-headers-fields '((:human-date . 12)
+                              (:flags      . 6)
+                              (:from-or-to . 22)
+                              (:subject    . nil)))
 
   (setq mu4e-headers-thread-root-prefix          '(""   . "")
         mu4e-headers-thread-first-child-prefix   '("│  " . "│  ")
@@ -3290,69 +3284,21 @@ return the filename."
                   (user-full-name . "Yayu Wang")
                   (smtpmail-smtp-user "st.saint.wyy@gmail.com")
                   (smtpmail-smtp-server "smtp.gmail.com")
-                  (mu4e-sent-folder       . "/gmail/sent")
+                  (mu4e-sent-messages-behavior . delete)
+                  (mu4e-sent-folder       . "/gmail/all")
                   (mu4e-drafts-folder     . "/gmail/drafts")
                   (mu4e-trash-folder      . "/gmail/trash")
                   (mu4e-refile-folder     . "/gmail/all")
                   (mu4e-bookmarks . (
-                                     (:name "Important" :query "maildir:/gmail/Important" :key ?i)
-                                     (:name "Unread messages" :query "maildir:/gmail/All flag:unread AND NOT flag:trashed" :key ?u)
-                                     (:name "Today's messages" :query "maildir:/gmail/All date:today..now" :key ?t)
-                                     (:name "Last 7 days" :query "maildir:/gmail/All date:7d..now" :key ?w)
-                                     (:name "Last month" :query "maildir:/gmail/All date:4w..now" :key ?m)
-                                     (:name "Messages with attachments" :query "maildir:/gmail/All flag:attach" :key ?a)
-                                     (:name "Flagged messages" :query "maildir:/gmail/All flag:flagged" :key ?f)))
-                  (mu4e-maildir-shortcuts . ( (:maildir "/gmail/INBOX" :key ?i)
-                                              (:maildir "/gmail/sent"  :key ?s)
-                                              (:maildir "/gmail/drafts"      :key ?d)
-                                              (:maildir "/gmail/trash"      :key ?t)
-                                              (:maildir "/gmail/all"   :key ?a)))))))
-
-  (require 'cl-lib)
-
-  (defun miao-bypass-unbind-keys (mode keys)
-   "From `miao-bypass-keymap-hash`, remove KEYS for MODE.
-MODE is a major-mode symbol, KEYS is a list of character literals, e.g. (?b ?j)."
-   (let ((km (gethash mode miao-bypass-keymap-hash)))
-     (when (and (listp km) (eq (car km) 'keymap))
-       (puthash
-        mode
-        (cons 'keymap
-              (cl-remove-if
-               (lambda (x) (memq (car x) keys))
-               (cdr km)))
-        miao-bypass-keymap-hash))))
-
-  (defun mu4e-unbind-miao-bypass-keys ()
-    (miao-bypass-unbind-keys 'mu4e-main-mode '(?b ?j))
-    (remove-hook 'mu4e-main-rendered-hook #'mu4e-unbind-miao-bypass-keys))
-
-  (add-hook 'mu4e-main-rendered-hook #'mu4e-unbind-miao-bypass-keys)
-
-  (make-mu4e-context
-   :name "ubc"
-   :match-func (lambda (msg)
-                 (when msg
-                   (string-match-p "/UBC" (mu4e-message-field msg :maildir))))
-   :vars '((user-mail-address . "yayu.wang@ubc.ca")
-           (user-full-name . "Yayu Wang")
-           (smtpmail-smtp-user "yayu.wang@ubc.ca")
-           (smtpmail-smtp-server "mail.cs.ubc.ca")
-           (mu4e-sent-folder       . "/UBC/Sent")
-           (mu4e-drafts-folder     . "/UBC/Draft")
-           (mu4e-trash-folder      . "/UBC/Trash")
-           (mu4e-refile-folder     . "/UBC/All")
-           (mu4e-bookmarks . (
-                              (:name "Unread messages" :query "maildir:/UBC/Inbox flag:unread AND NOT flag:trashed" :key ?u)
-                              (:name "Today's messages" :query "maildir:/UBC/Inbox date:today..now" :key ?t)
-                              (:name "Last 7 days" :query "maildir:/UBC/Inbox date:7d..now" :key ?w)
-                              (:name "Last month" :query "maildir:/UBC/Inbox date:4w..now" :key ?m)
-                              (:name "Messages with attachments" :query "maildir:/UBC/Inbox flag:attach" :key ?a)
-                              (:name "Flagged messages" :query "maildir:/UBC/Inbox flag:flagged" :key ?f)))
-           (mu4e-maildir-shortcuts . ((:maildir "/UBC/Inbox" :key ?i)
-                                      (:maildir "/UBC/Sent" :key ?s)
-                                      (:maildir "/UBC/Draft" :key ?d)
-                                      (:maildir "/UBC/Trash" :key ?t)))))
+                                     (:name "Unread messages" :query "maildir:/gmail/all flag:unread AND NOT flag:trashed" :key ?u)
+                                     (:name "Today's messages" :query "maildir:/gmail/all date:today..now" :key ?t)
+                                     (:name "Last 7 days" :query "maildir:/gmail/all date:7d..now" :key ?w)
+                                     (:name "Last month" :query "maildir:/gmail/all date:4w..now" :key ?m)
+                                     (:name "Messages with attachments" :query "maildir:/gmail/all flag:attach" :key ?a)
+                                     (:name "Flagged messages" :query "maildir:/gmail/all flag:flagged" :key ?f)))
+                  (mu4e-maildir-shortcuts . ( (:maildir "/gmail/all"    :key ?a)
+                                              (:maildir "/gmail/drafts" :key ?d)
+                                              (:maildir "/gmail/trash"  :key ?t)))))))
 
   (setq sendmail-program (executable-find "msmtp")
         send-mail-function #'smtpmail-send-it
@@ -3367,10 +3313,98 @@ MODE is a major-mode symbol, KEYS is a list of character literals, e.g. (?b ?j).
         message-sendmail-extra-arguments '("--read-envelope-from")
         message-send-mail-function #'message-send-mail-with-sendmail)
 
+  (setq mu4e-split-view 'vertical
+        mu4e-headers-visible-columns 74
+        mu4e-headers-visible-lines 16
+        mu4e-use-fancy-chars t
+        mu4e-headers-precise-alignment t)
+
+  (setq gnus-blocked-images nil
+        shr-indentation 2
+        shr-max-width 92
+        shr-max-image-proportion 0.7
+        shr-image-animate nil
+        shr-cookie-policy nil
+        mm-discouraged-alternatives '("text/plain" "text/richtext"))
+
+  (defun mu4e-headers-fold-every-thread ()
+    "Collapse every thread once a search has filled the headers buffer."
+    (when (bound-and-true-p mu4e-thread-mode)
+      (mu4e-thread-fold-all)
+      (mu4e-thread-goto-root)))
+
+  (defun mu4e-view-message-in-browser ()
+    "Render the message at point in the external web browser."
+    (interactive)
+    (mu4e-action-view-in-browser (mu4e-message-at-point)))
+
+  (defun mu4e-thread-show-sibling (backwards)
+    "Move to the neighbouring message inside the thread at point.
+Move to the previous message when BACKWARDS is non-nil."
+    (let ((showing (or (derived-mode-p 'mu4e-view-mode)
+                       (get-buffer-window (mu4e-get-view-buffer)))))
+      (mu4e--in-headers-context
+       (when (mu4e-thread-is-folded)
+         (mu4e-thread-unfold))
+       (let ((start (point))
+             (root (mu4e-thread-root))
+             (limit (or (mu4e-thread-next) (point-max))))
+         (forward-line (if backwards -1 1))
+         (beginning-of-line)
+         (if (and (>= (point) root)
+                  (< (point) limit)
+                  (get-text-property (point) 'msg))
+             (when showing (mu4e-headers-view-message))
+           (goto-char start)
+           (mu4e-message "No %s message in this thread"
+                         (if backwards "earlier" "later")))))))
+
+  (defun mu4e-thread-next-message ()
+    "Show the next message inside the thread being read."
+    (interactive)
+    (mu4e-thread-show-sibling nil))
+
+  (defun mu4e-thread-prev-message ()
+    "Show the previous message inside the thread being read."
+    (interactive)
+    (mu4e-thread-show-sibling t))
+
+  (add-hook 'mu4e-headers-found-hook #'mu4e-headers-fold-every-thread)
+  (add-hook 'mu4e-view-mode-hook #'visual-line-mode)
+  (add-hook 'mu4e-compose-mode-hook #'miao-insert-mode)
+  (add-hook 'org-msg-edit-mode-hook #'miao-insert-mode)
+
+  (bind-keys :map mu4e-main-mode-map
+             ("s" . mu4e-search)
+             ("b" . mu4e-search-bookmark)
+             ("j" . mu4e-search-maildir)
+             ("c" . mu4e-search-query))
+
+  (bind-keys :map mu4e-headers-mode-map
+             ("V" . mu4e-view-message-in-browser)
+             ("[" . mu4e-thread-prev-message)
+             ("]" . mu4e-thread-next-message)
+             ("{" . mu4e-headers-prev-unread)
+             ("}" . mu4e-headers-next-unread))
+
+  (bind-keys :map mu4e-view-mode-map
+             ("V" . mu4e-view-message-in-browser)
+             ("[" . mu4e-thread-prev-message)
+             ("]" . mu4e-thread-next-message)
+             ("{" . mu4e-view-headers-prev-unread)
+             ("}" . mu4e-view-headers-next-unread))
+
+  (add-to-list 'miao-bypass-mode-list 'mu4e-view-mode)
+
   (set-face-attribute 'mu4e-thread-fold-face nil :inherit 'unspecified)
 
   (miao-leader-define-keys
-    '("o m" . mu4e)))
+    '("e e" . mu4e)
+    '("e u" . mu4e-update-mail-and-index)
+    '("e c" . mu4e-compose-new)
+    '("e s" . mu4e-search)
+    '("e b" . mu4e-search-bookmark)
+    '("e j" . mu4e-search-maildir)))
 #+end_src
 
 ** org-msg
