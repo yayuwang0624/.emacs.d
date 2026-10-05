@@ -2315,8 +2315,8 @@ two concept names that disagree."
     '("t i" . org-toggle-inline-images)
     '("t l" . org-latex-preview))
   (miao-leader-define-keys
-      '("n c" . org-capture)
-      '("n L" . org-store-link)))
+      '("o c" . org-capture)
+      '("o l" . org-store-link)))
 #+end_src
 
 ** org-agenda
@@ -2446,10 +2446,10 @@ two concept names that disagree."
   (org-super-agenda-mode 1))
 
 (miao-leader-define-keys
-  '("n a" . open-org-agenda)
-  '("n d" . open-org-today)
-  '("n t" . open-org-todo-file)
-  '("n f" . open-org-todo-files))
+  '("o a" . open-org-agenda)
+  '("o d" . open-org-today)
+  '("o t" . open-org-todo-file)
+  '("o f" . open-org-todo-files))
 #+end_src
 
 ** org-modern
@@ -2631,7 +2631,8 @@ With a prefix ARG kill the active timer."
         (call-interactively #'org-pomodoro)))))
 
   (miao-leader-define-keys
-   '("n p" . org-pomodoro-dwim)))
+   '("o p" . org-pomodoro-dwim)
+   '("o P" . org-pomodoro)))
 #+end_src
 
 ** literate-calc-mode
@@ -2745,7 +2746,7 @@ With a prefix ARG kill the active timer."
   (setq vterm-buffer-name-string "vterm %s")
   (setq vterm-max-scrollback 65536)
   (miao-leader-define-keys
-   '("o t" . vterm)))
+   '("t v" . vterm)))
 #+end_src
 
 * project
@@ -3614,7 +3615,7 @@ Move to the previous message when BACKWARDS is non-nil."
         `(("st.saint.wyy@gmail.com" . ,org-calendar-file)
           ("1otkthaclt5l8hlvm4t51j1ugdad35jq@import.calendar.google.com" . ,org-calendar-file)))
   (miao-leader-define-keys
-   '("c c" . org-calendar))
+   '("o C" . org-calendar))
   :config
   (setq org-gcal-recurring-events-mode 'nested
         org-gcal-auto-archive nil
