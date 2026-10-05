@@ -2307,6 +2307,14 @@ two concept names that disagree."
   (with-eval-after-load 'visual-fill-column
     (add-hook 'org-mode-hook #'visual-fill-column-mode))
   (add-hook 'org-mode-hook #'flyspell-mode)
+  (defvar org-literature-directory (concat org-directory "literature/")
+    "Paper library, holding refs.bib, pdf/ and note/.")
+  (defvar org-literature-bibliography (concat org-literature-directory "refs.bib")
+    "BibTeX file with one entry per paper.")
+  (defvar org-literature-pdf-directory (concat org-literature-directory "pdf/")
+    "PDFs, named after the citation key or linked by the entry's file field.")
+  (defvar org-literature-notes-directory (concat org-literature-directory "note/")
+    "Paper notes named <key>.org, plus older org-noter notes named by title.")
   (miao-leader-define-major-keys 'org-mode
     '("s y" . org-copy-subtree)
     '("s w" . org-cut-subtree)
@@ -2476,15 +2484,16 @@ two concept names that disagree."
 (use-package org-noter
   :ensure t
   :init
-  (setq org-noter-notes-search-path (list (concat org-directory "literature/note"))
-        org-noter-default-notes-file-names '())
+  (setq org-noter-notes-search-path (list org-literature-notes-directory)
+        org-noter-default-notes-file-names '()
+        org-noter-find-additional-notes-functions '(org-literature-note-for-document))
   (setq org-noter-always-create-frame nil
         org-noter-notes-window-location 'other-frame)
   (setq org-noter-max-short-selected-text-length most-positive-fixnum)
   (setq org-noter-doc-split-fraction '(0.6 . 0.4))
   :config
-  (miao-leader-define-keys
-   '("n o" . org-noter)))
+  (miao-leader-define-major-keys '(org-mode pdf-view-mode)
+    '("n o" . org-noter)))
 #+end_src
 
 ** alert
@@ -3056,38 +3065,56 @@ variable `project-local-identifier' to be considered a project."
   :config
   (pdf-tools-install)
   (add-hook 'pdf-view-mode-hook 'auto-revert-mode)
-  (set-face-attribute 'pdf-view-region nil :inherit 'highlight))
-#+end_src
-
-** org-noter-pdftools
-#+begin_src emacs-lisp
-(use-package org-pdftools
-  :ensure nil
-  :vc (:url "git@github.com:ST-Saint/org-pdftools.git" :branch "master")
-  :hook (org-mode . org-pdftools-setup-link))
-
-(use-package org-noter-pdftools
-  :ensure nil
-  :vc (:url "git@github.com:ST-Saint/org-pdftools.git" :branch "master")
-  :config
-  (bind-keys :map org-noter-notes-mode-map
-             ("C-." . org-noter-pdftools-activate-org-note)
-             ("M-." . org-noter-pdftools-embed-org-note-to-pdf))
+  (add-hook 'pdf-view-mode-hook #'pdf-view-roll-minor-mode)
+  (set-face-attribute 'pdf-view-region nil :inherit 'highlight)
   (bind-keys :map pdf-view-mode-map
              ("C-a" . pdf-view-align-left)
              ("C-e" . pdf-view-align-right)
-             ("C-l" . pdf-view-center-in-window))
+             ("C-l" . pdf-view-center-in-window)))
+#+end_src
 
+* literature
+** citar
+#+begin_src emacs-lisp
+(use-package citar
+  :ensure t
+  :custom
+  (citar-bibliography (list org-literature-bibliography))
+  (citar-library-paths (list org-literature-pdf-directory))
+  (citar-notes-paths (list org-literature-notes-directory))
+  (citar-note-format-function #'org-literature-format-note)
+  (org-cite-global-bibliography (list org-literature-bibliography))
+  (org-cite-insert-processor 'citar)
+  (org-cite-follow-processor 'citar)
+  (org-cite-activate-processor 'citar))
+#+end_src
+
+** org-literature
+#+begin_src emacs-lisp
+(use-package org-literature
+  :load-path "~/Project/org-literature/"
+  :after citar
+  :demand t
+  :config
+  (setq org-noter-pdftools-insert-content-heading nil)
+  (org-literature-mode)
+  (bind-keys :map org-noter-notes-mode-map
+             ("C-." . org-noter-pdftools-activate-org-note)
+             ("M-." . org-noter-pdftools-embed-org-note-to-pdf))
   (miao-leader-define-major-keys 'pdf-view-mode
     '("i u" . org-noter-pdftools-insert-precise-note-underline)
     '("i k" . org-noter-pdftools-insert-precise-note-keyunderstand)
     '("i h" . org-noter-pdftools-insert-precise-note-highlight)
     '("i s" . org-noter-pdftools-insert-precise-note-squiggly)
     '("i S" . org-noter-pdftools-insert-precise-note-strikeout))
-
-  (setq org-noter-pdftools-insert-content-heading nil)
-
-  (with-eval-after-load 'pdf-annot (add-hook 'pdf-annot-activate-handler-functions #'org-noter-pdftools-jump-to-note)))
+  (miao-leader-define-keys
+   '("n n" . citar-open)
+   '("n e" . org-literature-open-entry)
+   '("n l" . org-literature-add-paper)
+   '("n s" . org-literature-search-notes)
+   '("n S" . org-literature-search-pdfs))
+  (miao-leader-define-major-keys '(org-mode pdf-view-mode)
+    '("n r t" . org-literature-edit-tags)))
 #+end_src
 
 * remote
@@ -3169,6 +3196,8 @@ variable `project-local-identifier' to be considered a project."
                    ((file-directory-p "/usr/share/emacs/site-lisp/mu4e/") "/usr/share/emacs/site-lisp/mu4e/")))))
   :after pinentry
   :config
+  (setq org-noter-pdftools-insert-content-heading nil)
+  (org-literature-mode)
   (require 'mu4e-contrib)
   (setq mu4e-get-mail-command "mbsync -a")
   (setq mu4e-confirm-quit nil)
