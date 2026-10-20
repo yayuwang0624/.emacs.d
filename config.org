@@ -1206,6 +1206,21 @@ Signal an error if the entire string was not used."
   (setq lsp-ltex-version "16.0.0"))
 #+end_src
 
+*** harper
+#+begin_src emacs-lisp
+(use-package eglot
+  :defer t
+  :config
+  (add-to-list 'eglot-server-programs
+               '(((org-mode :language-id "org")
+                  (markdown-mode :language-id "markdown")
+                  (LaTeX-mode :language-id "latex"))
+                 . ("harper-ls" "--stdio")))
+  (setq-default eglot-workspace-configuration
+                '(:harper-ls (:linters (:SpellCheck :json-false)
+                              :dialect "American"))))
+#+end_src
+
 ** citre
 #+begin_src emacs-lisp
 (use-package citre
@@ -1464,7 +1479,6 @@ Signal an error if the entire string was not used."
 (use-package auctex
   :ensure auctex
   :config
-  (add-hook 'LaTeX-mode-hook #'flyspell-mode)
   (add-hook 'LaTeX-mode-hook #'LaTeX-math-mode)
   (add-hook 'LaTeX-mode-hook #'reftex-mode)
   (setq LaTeX-command "latex -shell-escape")
@@ -1707,6 +1721,82 @@ Signal an error if the entire string was not used."
   (add-to-list 'completion-at-point-functions #'cape-dict)
   (add-to-list 'completion-at-point-functions #'cape-elisp-symbol))
   ;; (add-to-list 'completion-at-point-functions #'cape-line)
+#+end_src
+
+** spell correction
+
+#+begin_src emacs-lisp
+(use-package jinx
+  :ensure t
+  :hook (emacs-startup . global-jinx-mode)
+  :custom
+  (jinx-languages "en_US-large en_TECH")
+  :init
+  (defun org-setup-speller-capf ()
+    "Complete Tempel templates and speller words in Org buffers."
+    (setq-local completion-at-point-functions
+                (list (cape-capf-super #'tempel-complete
+                                       #'ispell-completion-at-point)
+                      #'cape-file)))
+
+  (setq ispell-complete-word-dict
+        (expand-file-name "~/.local/share/dict/speller-words.txt"))
+  (add-hook 'org-mode-hook #'org-setup-speller-capf)
+  :bind (("M-$" . jinx-correct)
+         ("C-M-$" . jinx-languages))
+  :config
+  (defun spell-correction-pass-through-try (string _table _pred point)
+    "Keep STRING as typed at POINT while candidates exist."
+    (cons string point))
+
+  (defun spell-correction-pass-through-all (_string table pred _point)
+    "Return every candidate of TABLE that satisfies PRED, unfiltered."
+    (nconc (all-completions "" table pred) 0))
+
+  (add-to-list 'completion-styles-alist
+               '(spell-correction-pass-through
+                 spell-correction-pass-through-try
+                 spell-correction-pass-through-all
+                 "Show every candidate without matching the input."))
+  (add-to-list 'completion-category-overrides
+               '(spell-correction (styles spell-correction-pass-through)))
+
+  (defun spell-correction-candidates (word)
+    "Return the suggestions for WORD from every active jinx dictionary."
+    (delete-dups
+     (append (cl-loop for dict in jinx--dicts
+                      append (jinx--mod-suggest dict word))
+             (jinx--session-suggestions word))))
+
+  (defun spell-correction-capf ()
+    "Offer jinx corrections for the misspelled word at point.
+Only an explicit completion command asks for them, so Corfu's auto
+popup keeps completing the word being typed."
+    (when-let* (((memq this-command '(completion-at-point complete-symbol)))
+                (overlay (car (jinx--get-overlays
+                               (max (point-min) (1- (point)))
+                               (min (point-max) (1+ (point))))))
+                (start (overlay-start overlay))
+                (end (overlay-end overlay))
+                (candidates (spell-correction-candidates
+                             (buffer-substring-no-properties start end))))
+      (list start end
+            (lambda (string pred action)
+              (if (eq action 'metadata)
+                  '(metadata (category . spell-correction)
+                             (display-sort-function . identity)
+                             (cycle-sort-function . identity))
+                (complete-with-action action candidates string pred)))
+            :exclusive 'no
+            :annotation-function (lambda (_) " spell"))))
+
+  (defun spell-correction-setup-capf ()
+    "Put `spell-correction-capf' first in the buffer while jinx runs."
+    (if jinx-mode
+        (add-hook 'completion-at-point-functions #'spell-correction-capf -90 t)
+      (remove-hook 'completion-at-point-functions #'spell-correction-capf t)))
+
+  (add-hook 'jinx-mode-hook #'spell-correction-setup-capf))
 #+end_src
 
 ** pl-symbols
@@ -2341,7 +2431,6 @@ two concept names that disagree."
 
   (with-eval-after-load 'visual-fill-column
     (add-hook 'org-mode-hook #'visual-fill-column-mode))
-  (add-hook 'org-mode-hook #'flyspell-mode)
   (defvar org-literature-directory (concat org-directory "literature/")
     "Paper library, holding refs.bib, pdf/ and note/.")
   (defvar org-literature-bibliography (concat org-literature-directory "refs.bib")
