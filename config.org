@@ -3849,6 +3849,8 @@ Move to the previous message when BACKWARDS is non-nil."
         org-gcal-down-days 60
         org-gcal-notify-p nil
         org-gcal-remove-api-cancelled-events t
+        org-gcal-local-timezone (string-remove-prefix "/usr/share/zoneinfo/"
+                                                      (file-truename "/etc/localtime"))
         plstore-cache-passphrase-for-symmetric-encryption t
         request-message-level -1)
   (add-to-list 'plstore-encrypt-to "BE9945C2FDE35D11")
