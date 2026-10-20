@@ -91,7 +91,7 @@ Signal an error if the entire string was not used."
                                    (insert . "ಎ/ᐠ.ꞈ.ᐟ\\ಎ")
                                    (leader . "ಎ/ᐠ.ˍ.ᐟ\\ಎ")
                                    (bypass . "ಎ/ᐠ. .ᐟ\\ಎ")
-                                   (miacro . "ಎ/ᐠ｡ꞈ｡ᐟ\\ಎ")))
+                                   (miacro . "ಎ/ᐠ˗ˬ˗ᐟ\\ಎ")))
 
   (with-eval-after-load "doom-modeline"
     (defun doom-modeline-segment--modals ()
@@ -100,6 +100,7 @@ Signal an error if the entire string was not used."
     (add-hook 'miao-insert-mode-hook #'miao-update-modeline-box)
     (add-hook 'miao-leader-mode-hook #'miao-update-modeline-box)
     (add-hook 'miao-bypass-mode-hook #'miao-update-modeline-box)
+    (add-hook 'miao-miacro-state-hook #'miao-update-modeline-box)
     (add-hook 'window-selection-change-functions
               (lambda (&rest _) (miao-update-modeline-box)))
     (add-hook 'window-buffer-change-functions
@@ -160,9 +161,18 @@ Signal an error if the entire string was not used."
     '("G" . miao-miacro-go)
     '("," . pop-to-mark-command)
     '("." . miao-mark-string-inner)
-    '(";" . miao-toggle-mark-point))
+    '(";" . miao-toggle-mark-point)
+    '("<escape>" . miao-escape)
+    '("`" . miao-escape))
   (miao-define-keys 'insert
-    '("M-SPC" . miao-leader))
+    '("M-SPC" . miao-leader)
+    '("`" . miao-normal-mode))
+  (miao-define-keys 'miacro
+    '("t" . miao-miacro-toggle)
+    '("M-n" . miao-miacro-next-target)
+    '("M-p" . miao-miacro-prev-target)
+    '("C-M-n" . miao-miacro-mark-next)
+    '("C-M-p" . miao-miacro-mark-prev))
   (miao-leader-define-keys
     '("b r" . revert-buffer)
     '("b l" . miao-list-buffers)
@@ -170,15 +180,20 @@ Signal an error if the entire string was not used."
     '("f R" . rename-visited-file)
     '("f f" . find-file)
     '("f y" . copy-buffer-path)
+    '("f b" . open-file-in-browser)
     '("f D" . delete-buffer-file)
     '("f U" . root-open-buffer-file)
     '("f p" . open-config-file)
     '("g g" . magit)
     '("g f" . magit-find-file)
+    '("m m" . miao-mark-all-dwim)
     '("m a" . miao-mark-all-symbol)
+    '("m w" . miao-mark-all-word)
+    '("m r" . miao-mark-all-regexp)
     '("m l" . miao-mark-all-lines)
+    '("m L" . miao-mark-all-lines-matching)
     '("l l" . toggle-visual-truncate-line)
-    '("<SPC>" . miao-cursor-blink)))
+    '("`" . miao-cursor-blink)))
 #+end_src
 
 * customize
@@ -277,6 +292,17 @@ Signal an error if the entire string was not used."
     (kill-new path)
     (message "%s" path)
     path))
+
+(defun open-file-in-browser ()
+  "Open the visited file, or the file at point in Dired, in Zen."
+  (interactive)
+  (let ((file (if (derived-mode-p 'dired-mode)
+                  (dired-get-filename nil t)
+                (buffer-file-name (buffer-base-buffer))))
+        (browse-url-generic-program "zen-browser"))
+    (unless file
+      (user-error "This buffer visits no file"))
+    (browse-url-generic (browse-url-file-url file))))
 
 (defun delete-current-file ()
   (interactive)
@@ -421,6 +447,13 @@ Signal an error if the entire string was not used."
 #+begin_src emacs-lisp
 (set-frame-font "SauceCodePro Nerd Font Mono 18" nil t)
 
+(use-package emacs
+  :ensure nil
+  :config
+  (dolist (fontset (cons t (fontset-list)))
+    (set-fontset-font fontset ?˗ "Noto Sans Mono")
+    (set-fontset-font fontset '(#x278a . #x2793) "Symbola")))
+
 (defun set-font-size (font-size)
   (interactive "nFont-size: ")
   (set-face-attribute 'default nil :height (* font-size 10)))
@@ -540,6 +573,8 @@ Signal an error if the entire string was not used."
   (dashboard-setup-startup-hook)
   (setq initial-buffer-choice
         (lambda () (dashboard-open) (get-buffer dashboard-buffer-name)))
+
+  (add-to-list 'miao-bypass-mode-list 'dashboard-mode)
 
   (miao-leader-define-keys
     '("d d" . dashboard)))
