@@ -2602,6 +2602,22 @@ two concept names that disagree."
   (global-org-modern-mode))
 #+end_src
 
+** org-appear
+#+begin_src emacs-lisp
+(use-package org-appear
+  :ensure t
+  :hook (org-mode . org-appear-mode)
+  :init
+  (setq org-hide-emphasis-markers t
+        org-appear-trigger 'on-change
+        org-appear-autolinks t
+        org-appear-autoentities t
+        org-appear-autosubmarkers t
+        org-appear-autokeywords t
+        org-appear-inside-latex t))
+#+end_src
+
+
 
 ** org-noter
 #+begin_src emacs-lisp
