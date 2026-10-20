@@ -2333,6 +2333,14 @@ two concept names that disagree."
     "Meeting notes and reference notes, newest first.")
   (defvar org-journal-file (concat org-directory "journal.org")
     "Date-tree journal.")
+  (defvar org-literature-directory (concat org-directory "literature/")
+    "Paper library, holding refs.bib, pdf/ and note/.")
+  (defvar org-literature-bibliography (concat org-literature-directory "refs.bib")
+    "BibTeX file with one entry per paper.")
+  (defvar org-literature-pdf-directory (concat org-literature-directory "pdf/")
+    "PDFs, named after the citation key or linked by the entry's file field.")
+  (defvar org-literature-notes-directory (concat org-literature-directory "note/")
+    "Paper notes named <key>.org, plus older org-noter notes named by title.")
   (setq org-agenda-files (list org-todo-file org-calendar-file org-notes-file))
   (setq org-default-notes-file org-notes-file)
   (setq org-agenda-text-search-extra-files
@@ -2431,14 +2439,6 @@ two concept names that disagree."
 
   (with-eval-after-load 'visual-fill-column
     (add-hook 'org-mode-hook #'visual-fill-column-mode))
-  (defvar org-literature-directory (concat org-directory "literature/")
-    "Paper library, holding refs.bib, pdf/ and note/.")
-  (defvar org-literature-bibliography (concat org-literature-directory "refs.bib")
-    "BibTeX file with one entry per paper.")
-  (defvar org-literature-pdf-directory (concat org-literature-directory "pdf/")
-    "PDFs, named after the citation key or linked by the entry's file field.")
-  (defvar org-literature-notes-directory (concat org-literature-directory "note/")
-    "Paper notes named <key>.org, plus older org-noter notes named by title.")
   (miao-leader-define-major-keys 'org-mode
     '("s y" . org-copy-subtree)
     '("s w" . org-cut-subtree)
@@ -3210,7 +3210,15 @@ variable `project-local-identifier' to be considered a project."
   (org-cite-global-bibliography (list org-literature-bibliography))
   (org-cite-insert-processor 'citar)
   (org-cite-follow-processor 'citar)
-  (org-cite-activate-processor 'citar))
+  (org-cite-activate-processor 'citar)
+  :config
+  (defun org-cite-closing-bracket-to-reference (&rest _)
+    "Treat the closing bracket of a citation as part of its last reference."
+    (when (and (eq (char-after) ?\])
+               (eq (org-element-type (org-element-context)) 'citation-reference))
+      (backward-char)))
+  (advice-add 'org-return :before #'org-cite-closing-bracket-to-reference)
+  (advice-add 'org-open-at-point :before #'org-cite-closing-bracket-to-reference))
 #+end_src
 
 ** org-literature
@@ -3320,8 +3328,6 @@ variable `project-local-identifier' to be considered a project."
                    ((file-directory-p "/usr/share/emacs/site-lisp/mu4e/") "/usr/share/emacs/site-lisp/mu4e/")))))
   :after pinentry
   :config
-  (setq org-noter-pdftools-insert-content-heading nil)
-  (org-literature-mode)
   (require 'mu4e-contrib)
   (setq mu4e-get-mail-command "mbsync -a")
   (setq mu4e-confirm-quit nil)
