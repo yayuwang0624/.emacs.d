@@ -614,6 +614,26 @@ Signal an error if the entire string was not used."
   (global-set-key (kbd "C-h p") #'describe-package))
 #+end_src
 
+** command-log-mode
+#+begin_src emacs-lisp
+(use-package command-log-mode
+  :ensure t
+  :custom
+  (command-log-mode-is-global t)
+  :config
+  (global-command-log-mode))
+#+end_src
+
+** keyfreq
+#+begin_src emacs-lisp
+(use-package keyfreq
+  :ensure nil
+  :vc (:url "https://github.com/suliveevil/keyfreq" :branch "master")
+  :config
+  (keyfreq-mode 1)
+  (keyfreq-autosave-mode 1))
+#+end_src
+
 
 ** symbol-overlay
 #+begin_src emacs-lisp
