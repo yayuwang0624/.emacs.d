@@ -381,6 +381,17 @@ Signal an error if the entire string was not used."
       scroll-margin 3)
 
 (setq-default truncate-lines t)
+
+(defun line-move-logical-when-unreliable (orig &rest args)
+  "Call ORIG with ARGS, moving by logical lines where visual motion misreads columns."
+  (let ((line-move-visual (and line-move-visual
+                               (not truncate-lines)
+                               (not (get-char-property (point) 'display))
+                               (not (and (derived-mode-p 'org-mode)
+                                         (org-at-table-p))))))
+    (apply orig args)))
+(advice-add 'line-move :around #'line-move-logical-when-unreliable)
+
 (setq isearch-lazy-count t)
 (setq-default case-fold-search t)
 (setq display-line-numbers-type t)
@@ -431,7 +442,7 @@ Signal an error if the entire string was not used."
   :config
   (setq colorful-use-prefix nil
         colorful-highlight-in-comments t
-        colorful-only-strings 'only-prog)
+        colorful-only-strings nil)
   (global-colorful-mode))
 #+end_src
 
@@ -803,7 +814,6 @@ Signal an error if the entire string was not used."
 ** emacs native
 #+begin_src emacs-lisp
 (delete-selection-mode t)
-(setq delete-selection-save-to-register 'kill)
 
 (defun kill-ring-save-goto-beginning (&rest _)
   (when (use-region-p)
@@ -997,7 +1007,9 @@ Signal an error if the entire string was not used."
 ** xclip
 #+begin_src emacs-lisp
 (use-package xclip
-  :ensure t)
+  :ensure t
+  :config
+  (xclip-mode 1))
 #+end_src
 
 
