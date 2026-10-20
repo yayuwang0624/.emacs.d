@@ -3602,20 +3602,37 @@ Move to the previous message when BACKWARDS is non-nil."
 #+begin_src emacs-lisp
 (use-package calfw
   :ensure t
+  :custom
+  (calendar-week-start-day 0)
+  (calfw-fchar-junction ?╋)
+  (calfw-fchar-vertical-line ?┃)
+  (calfw-fchar-horizontal-line ?━)
+  (calfw-fchar-left-junction ?┣)
+  (calfw-fchar-right-junction ?┫)
+  (calfw-fchar-top-junction ?┯)
+  (calfw-fchar-top-left-corner ?┏)
+  (calfw-fchar-top-right-corner ?┓)
   :config
-  (setq calendar-week-start-day 0
-        calfw-fchar-junction ?╋
-        calfw-fchar-vertical-line ?┃
-        calfw-fchar-horizontal-line ?━
-        calfw-fchar-left-junction ?┣
-        calfw-fchar-right-junction ?┫
-        calfw-fchar-top-junction ?┯
-        calfw-fchar-top-left-corner ?┏
-        calfw-fchar-top-right-corner ?┓)
   (unbind-key "C-v" calfw-calendar-mode-map)
   (unbind-key "M-v" calfw-calendar-mode-map)
   (add-to-list 'miao-bypass-mode-list 'calfw-calendar-mode)
-  (add-hook 'calfw-calendar-mode-hook #'miao-global-mode-enable-in-buffer))
+  (add-hook 'calfw-calendar-mode-hook #'miao-global-mode-enable-in-buffer)
+
+  (defface calfw-wide-char-face '((t :family "Noto Sans CJK SC"))
+    "Face for wide characters in the calendar, sized to fill exactly two columns.")
+
+  (define-advice calfw--cp-update (:after (component &rest _) fit-wide-chars)
+    "Draw the wide characters in COMPONENT's buffer exactly two columns wide."
+    (with-current-buffer (calfw-cp-get-buffer component)
+      (set-face-attribute 'calfw-wide-char-face nil
+                          :font (font-spec :family "Noto Sans CJK SC"
+                                           :size (* 2 (default-font-width))))
+      (with-silent-modifications
+        (save-excursion
+          (goto-char (point-min))
+          (while (re-search-forward "[^[:ascii:]]" nil t)
+            (when (= (char-width (char-before)) 2)
+              (add-face-text-property (1- (point)) (point) 'calfw-wide-char-face))))))))
 
 (use-package calfw-org
   :ensure t
@@ -3625,10 +3642,7 @@ Move to the previous message when BACKWARDS is non-nil."
   :ensure nil
   :vc (:url "https://github.com/haji-ali/calfw-blocks" :rev "87937b7c7523b6d314bf9e21310924c94f182954")
   :after calfw-org
-  :config
-  (setq calfw-blocks-lines-per-hour 2
-        calfw-blocks-event-keymap calfw-org-text-keymap)
-
+  :preface
   (defun calfw-blocks-event-hour-range (model)
     "Return (FIRST . LAST), the hours covered by the timed events in MODEL."
     (let ((first 23) (last 0))
@@ -3643,31 +3657,10 @@ Move to the previous message when BACKWARDS is non-nil."
                     last (max last (+ (car end) (ceiling (cadr end) 60) -1)))))))
       (cons first last)))
 
-  (define-advice calfw-blocks-render-calendar-cells-days (:around (fn model &rest args) fit-events)
-    "Give full height only to the hours that have events."
-    (let ((calfw-blocks-nonshrinking-hours (calfw-blocks-event-hour-range model)))
-      (apply fn model args)))
-
-  (define-advice calfw-blocks--get-block-vertical-position (:around (fn date event) skip-untimed)
-    "Return a whole-hour position for an EVENT with no start time."
-    (if (calfw-event-start-time event)
-        (funcall fn date event)
-      (list 0 -1)))
-
-  (define-advice calfw-blocks-compare-time (:around (fn t1 t2) untimed-first)
-    "Order a nil time in T1 or T2 before any real time."
-    (cond ((and t1 t2) (funcall fn t1 t2))
-          ((equal t1 t2) 0)
-          (t1 -1)
-          (t +1)))
-
   (defun calfw-blocks-show-from-top (&rest _)
     "Scroll to the first line when the whole calendar fits in the window."
     (when (<= (count-screen-lines (point-min) (point-max)) (window-body-height))
       (set-window-start nil (point-min))))
-
-  (dolist (command '(calfw-blocks-navi-goto-now calfw-blocks-navi-goto-next-event))
-    (advice-add command :after #'calfw-blocks-show-from-top))
 
   (defun org-agenda-calfw-event (item line)
     "Make a `calfw-event' from the org agenda ITEM and its display text LINE."
@@ -3705,15 +3698,6 @@ Move to the previous message when BACKWARDS is non-nil."
     (when-let* ((day (and (derived-mode-p 'org-agenda-mode) (org-get-at-bol 'day))))
       (calendar-gregorian-from-absolute day)))
 
-  (defvar org-agenda-calfw-map
-    (calfw--define-keymap
-     '(("q" . quit-window)
-       ("a" . calfw-org-open-agenda-day)
-       ("." . calfw-blocks-navi-goto-now)
-       ("n" . calfw-blocks-navi-next-view-command)
-       ("p" . calfw-blocks-navi-previous-view-command)))
-    "Keys added to the org agenda block calendar.")
-
   (defun open-calendar-agenda ()
     "Show the org agenda files as time blocks, one week per screen."
     (interactive)
@@ -3726,6 +3710,89 @@ Move to the previous message when BACKWARDS is non-nil."
      (list (org-agenda-calfw-source org-calendar-file "medium purple")
            (org-agenda-calfw-source org-todo-file "sea green")
            (org-agenda-calfw-source org-notes-file "dim gray"))))
+  :custom
+  (calfw-blocks-lines-per-hour 2)
+  :config
+  (setq calfw-blocks-event-keymap calfw-org-text-keymap)
+  (defvar org-agenda-calfw-map
+    (calfw--define-keymap
+     '(("q" . quit-window)
+       ("a" . calfw-org-open-agenda-day)
+       ("." . calfw-blocks-navi-goto-now)
+       ("n" . calfw-blocks-navi-next-view-command)
+       ("p" . calfw-blocks-navi-previous-view-command)))
+    "Keys added to the org agenda block calendar.")
+
+  (define-advice calfw-blocks-render-calendar-cells-days (:around (fn model &rest args) fit-events)
+    "Give full height only to the hours that have events."
+    (let ((calfw-blocks-nonshrinking-hours (calfw-blocks-event-hour-range model)))
+      (apply fn model args)))
+
+  (define-advice calfw-blocks--get-block-vertical-position (:around (fn date event) skip-untimed)
+    "Return a whole-hour position for an EVENT with no start time."
+    (if (calfw-event-start-time event)
+        (funcall fn date event)
+      (list 0 -1)))
+
+  (define-advice calfw-blocks-compare-time (:around (fn t1 t2) untimed-first)
+    "Order a nil time in T1 or T2 before any real time."
+    (cond ((and t1 t2) (funcall fn t1 t2))
+          ((equal t1 t2) 0)
+          (t1 -1)
+          (t +1)))
+
+  (define-advice calfw-blocks--wrap-string (:override (text width max-lines &optional word-break) by-column)
+    "Wrap TEXT into at most MAX-LINES lines of WIDTH columns, breaking at spaces when possible."
+    (let ((word-break (or word-break "-"))
+          (rest text)
+          lines)
+      (while (and (> (string-width rest) width) (> max-lines 1))
+        (let* ((head (truncate-string-to-width rest width))
+               (cut (max 1 (length head)))
+               (space (string-match-p "[ \t][^ \t]*\\'" head)))
+          (cond ((memq (aref rest cut) '(?\s ?\t))
+                 (push (substring rest 0 cut) lines)
+                 (setq rest (substring rest (1+ cut))))
+                ((and space (> space 0))
+                 (push (substring rest 0 space) lines)
+                 (setq rest (substring rest (1+ space))))
+                ((or (> (char-width (aref rest (1- cut))) 1)
+                     (> (char-width (aref rest cut)) 1)
+                     (= cut 1))
+                 (push (substring rest 0 cut) lines)
+                 (setq rest (substring rest cut)))
+                (t
+                 (push (concat (substring rest 0 (1- cut)) word-break) lines)
+                 (setq rest (substring rest (1- cut)))))
+          (setq max-lines (1- max-lines))))
+      (mapconcat #'identity (nreverse (cons rest lines)) "\n")))
+
+  (define-advice calfw-blocks--to-lines (:override (text width max-lines help-text) by-column)
+    "Split wrapped TEXT into lines, ending the last of MAX-LINES with an ellipsis if TEXT does not fit in WIDTH columns."
+    (let* ((lines (split-string text "\n"))
+           (last-index (1- (min max-lines (length lines))))
+           (last-line (nth last-index lines)))
+      (when (or (> (length lines) max-lines)
+                (> (string-width last-line) width))
+        (let ((ellipsis (apply #'propertize (truncate-string-ellipsis)
+                               (and (> (length last-line) 0)
+                                    (text-properties-at (1- (length last-line)) last-line)))))
+          (setf (nth last-index lines)
+                (concat (truncate-string-to-width last-line (- width (string-width ellipsis)))
+                        ellipsis))
+          (dolist (line lines)
+            (add-text-properties 0 (length line) (list 'help-echo help-text) line))))
+      lines))
+
+  (define-advice calfw-blocks-generalized-substring (:override (s start end props) by-column)
+    "Return columns START to END of S, padded with spaces carrying PROPS."
+    (let ((cut (truncate-string-to-width (or s "") end start)))
+      (concat cut (apply #'propertize
+                         (make-string (max 0 (- end start (string-width cut))) ?\s)
+                         props))))
+
+  (dolist (command '(calfw-blocks-navi-goto-now calfw-blocks-navi-goto-next-event))
+    (advice-add command :after #'calfw-blocks-show-from-top))
 
   (miao-leader-define-keys
    '("c a" . open-calendar-agenda)))
