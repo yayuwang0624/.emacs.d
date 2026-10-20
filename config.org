@@ -294,15 +294,19 @@ Signal an error if the entire string was not used."
     path))
 
 (defun open-file-in-browser ()
-  "Open the visited file, or the file at point in Dired, in Zen."
+  "Open the visited file, or the file at point in Dired, in Zen.
+Use the default browser when Zen is not installed."
   (interactive)
   (let ((file (if (derived-mode-p 'dired-mode)
                   (dired-get-filename nil t)
                 (buffer-file-name (buffer-base-buffer))))
-        (browse-url-generic-program "zen-browser"))
+        (zen (executable-find "zen-browser")))
     (unless file
       (user-error "This buffer visits no file"))
-    (browse-url-generic (browse-url-file-url file))))
+    (if zen
+        (let ((browse-url-generic-program zen))
+          (browse-url-generic (browse-url-file-url file)))
+      (browse-url (browse-url-file-url file)))))
 
 (defun delete-current-file ()
   (interactive)
