@@ -1036,14 +1036,6 @@ kill the daemon."
   (flycheck-vale-setup))
 #+end_src
 
-#+begin_src emacs-lisp
-(use-package lsp-grammarly
-  :ensure t
-  :hook ((LaTeX-mode . (lambda ()
-                        (require 'lsp-grammarly)
-                        (lsp)))))
-#+end_src
-
 
 ** atomic-chrome
 #+begin_src emacs-lisp
@@ -1286,15 +1278,8 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 *** lsp-latex
 #+begin_src emacs-lisp
 (use-package lsp-latex
-  :ensure t)
-#+end_src
-
-*** lsp-ltex
-#+begin_src emacs-lisp
-(use-package lsp-ltex
   :ensure t
-  :init
-  (setq lsp-ltex-version "16.0.0"))
+  :hook (LaTeX-mode . lsp-deferred))
 #+end_src
 
 *** harper
@@ -1310,6 +1295,25 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
   (setq-default eglot-workspace-configuration
                 '(:harper-ls (:linters (:SpellCheck :json-false)
                               :dialect "American"))))
+
+;; LaTeX buffers run lsp-mode for texlab, so harper joins them there as an
+;; add-on rather than through eglot
+(use-package lsp-mode
+  :defer t
+  :config
+  (lsp-register-custom-settings
+   '(("harper-ls.linters.SpellCheck" :json-false t)
+     ("harper-ls.dialect" "American")))
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection '("harper-ls" "--stdio"))
+    :activation-fn (lsp-activate-on "latex")
+    :add-on? t
+    :server-id 'harper-ls
+    :initialized-fn (lambda (workspace)
+                      (with-lsp-workspace workspace
+                        (lsp--set-configuration
+                         (lsp-configuration-section "harper-ls")))))))
 #+end_src
 
 ** citre
