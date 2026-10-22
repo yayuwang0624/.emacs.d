@@ -35,7 +35,11 @@
 ** use-package
 #+begin_src emacs-lisp
 (setq package-archives '(("melpa" . "https://melpa.org/packages/")
-                         ("elpa" . "https://elpa.gnu.org/packages/")))
+                         ("elpa" . "https://elpa.gnu.org/packages/")
+                         ("etaf" . "https://etaf.top/packages/"))
+      package-archive-priorities '(("melpa" . 10)
+                                   ("elpa" . 5)
+                                   ("etaf" . 0)))
 
 (package-initialize)
 
@@ -1550,6 +1554,13 @@ Use the default browser when Zen is not installed."
     '("m g" . grip-mode))
   (miao-leader-define-major-keys 'markdown-mode
     '("m g" . grip-mode)))
+
+(use-package etaf-md-preview
+  :ensure t
+  :commands etaf-md-preview-open
+  :init
+  (miao-leader-define-major-keys 'markdown-mode
+    '("m p" . etaf-md-preview-open)))
 #+end_src
 
 * completion
