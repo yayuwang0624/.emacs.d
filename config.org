@@ -3297,7 +3297,7 @@ variable `project-local-identifier' to be considered a project."
 
 * pdf
 ** pdf-tools
-#+begin_src emacs-lisp :tangle no
+#+begin_src emacs-lisp
 (use-package pdf-tools
   :ensure t
   :config
