@@ -1080,9 +1080,36 @@ kill the daemon."
   (defun format-all-set-tex-formatter ()
     (setq format-all-formatters `(("tex" (tex-fmt)))))
 
+  (defvar bibtex-tidy-arguments
+    '("-y" "bibtex-tidy@1.15.1"
+      "--curly" "--numeric" "--months" "--align=14" "--blank-lines"
+      "--sort=year,key" "--sort-fields" "--trailing-commas"
+      "--no-escape" "--remove-empty-fields")
+    "Arguments to npx for formatting BibTeX outside repos with scripts/tidy-bib.
+The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.")
+
+  (define-format-all-formatter bibtex-tidy
+    (:executable "npx")
+    (:install "pacman -S npm")
+    (:languages "BibTeX")
+    (:features)
+    (:format
+     (let ((root (locate-dominating-file default-directory "scripts/tidy-bib")))
+       (if root
+           (format-all--buffer-easy (expand-file-name "scripts/tidy-bib" root))
+         (apply #'format-all--buffer-easy executable
+                (append bibtex-tidy-arguments
+                        (list (if indent-tabs-mode
+                                  "--tab"
+                                (format "--space=%d" bibtex-field-indentation)))))))))
+
+  (defun format-all-set-bibtex-formatter ()
+    (setq-local format-all-formatters '(("BibTeX" bibtex-tidy))))
+
   (add-hook 'c-mode-hook #'format-all-set-c-formatter)
   (add-hook 'java-mode-hook #'format-all-set-c-formatter)
   (add-hook 'LaTeX-mode-hook #'format-all-set-tex-formatter)
+  (add-hook 'bibtex-mode-hook #'format-all-set-bibtex-formatter)
 
   (miao-leader-define-keys
       '("c f" . format-all-buffer))
@@ -1091,9 +1118,26 @@ kill the daemon."
                 (interactive)
                 (lsp-disconnect)
                 (LaTeX-fill-buffer t)
-                (lsp))))
-  (miao-leader-define-major-keys 'bibtex-mode
-    '("c f" . bibtex-reformat)))
+                (lsp)))))
+#+end_src
+
+** bibtex
+#+begin_src emacs-lisp
+(use-package bibtex
+  :ensure nil
+  :config
+  (put 'bibtex-field-indentation 'safe-local-variable #'integerp)
+
+  (defun bibtex-default-to-tabs ()
+    "Indent with tabs unless file or directory variables say otherwise."
+    (unless (local-variable-p 'indent-tabs-mode)
+      (setq-local indent-tabs-mode t))
+    (unless (local-variable-p 'tab-width)
+      (setq-local tab-width 4))
+    (unless (local-variable-p 'bibtex-field-indentation)
+      (setq-local bibtex-field-indentation tab-width)))
+
+  (add-hook 'bibtex-mode-hook #'bibtex-default-to-tabs))
 #+end_src
 
 ** compile
