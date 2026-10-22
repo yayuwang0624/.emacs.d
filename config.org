@@ -589,6 +589,13 @@ Use the default browser when Zen is not installed."
     (dashboard-open)
     (delete-other-windows))
 
+  (defun dashboard-shorten-path-skip-remote (fn path &rest args)
+    "Leave remote PATH as is instead of letting FN connect through Tramp.
+An unreachable host would error out of `initial-buffer-choice' and
+kill the daemon."
+    (if (file-remote-p path) path (apply fn path args)))
+  (advice-add 'dashboard-shorten-path :around #'dashboard-shorten-path-skip-remote)
+
   (dashboard-setup-startup-hook)
   (setq initial-buffer-choice
         (lambda () (dashboard-open) (get-buffer dashboard-buffer-name)))
