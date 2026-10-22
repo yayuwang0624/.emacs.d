@@ -1237,7 +1237,7 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 *** lsp-pyright
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
 (use-package lsp-pyright
   :ensure t
   :hook (python-mode . (lambda ()
@@ -1246,7 +1246,7 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 *** lsp-java
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
 (use-package lsp-java
   :ensure t
   :config
@@ -1490,7 +1490,7 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 ** agda
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
 (use-package agda2
   :ensure nil
   :load-path (lambda () (file-name-directory (shell-command-to-string "agda-mode locate")))
@@ -1551,7 +1551,7 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 
 ** codeql
 
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
 (use-package emacs-codeql
   :ensure t
   :vc (:url "https://github.com/anticomputer/emacs-codeql.git" :branch "main")
@@ -3297,7 +3297,7 @@ variable `project-local-identifier' to be considered a project."
 
 * pdf
 ** pdf-tools
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle no
 (use-package pdf-tools
   :ensure t
   :config
