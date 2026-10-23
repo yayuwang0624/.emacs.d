@@ -1,0 +1,142 @@
+diff --git a/eaf_pdf_buffer.py b/eaf_pdf_buffer.py
+index 7da8382..a89e45b 100755
+--- a/eaf_pdf_buffer.py
++++ b/eaf_pdf_buffer.py
+@@ -24,6 +24,7 @@ from PyQt6.QtCore import QTimer,  QObject
+ from core.buffer import Buffer    # type: ignore
+ from core.utils import *
+ import fitz
++import json
+ import os
+ import threading
+ 
+@@ -407,6 +408,19 @@ class AppBuffer(Buffer):
+     def current_percent(self):
+         return str(self.buffer_widget.current_percent())
+ 
++    @PostGui()
++    def add_annot_styled(self, annot_type, color, callback):
++        """Annotate the selection with ANNOT_TYPE in COLOR, then call the Emacs
++        function CALLBACK with the url and the new annotations as JSON."""
++        created = []
++        if self.buffer_widget.is_select_mode:
++            created = self.buffer_widget.annot_select_char_area(annot_type, color=color)
++        eval_in_emacs(callback, [self.url, json.dumps(created)])
++
++    @PostGui()
++    def jump_to_annot_id(self, page, annot_id, percent):
++        self.buffer_widget.jump_to_annot_id(int(page), annot_id, float(percent or 0))
++
+     def add_annot_highlight(self):
+         if self.buffer_widget.is_select_mode:
+             self.buffer_widget.annot_select_char_area("highlight")
+diff --git a/eaf_pdf_widget.py b/eaf_pdf_widget.py
+index dbf6cdc..2a46356 100644
+--- a/eaf_pdf_widget.py
++++ b/eaf_pdf_widget.py
+@@ -23,6 +23,7 @@ import math
+ import os
+ import platform
+ import time
++import uuid
+ import webbrowser
+ 
+ import fitz
+@@ -137,6 +138,7 @@ class PdfViewerWidget(QWidget):
+ 
+         # select text
+         self.is_select_mode = False
++        self.stale_global_offset = QPoint(0, 0)
+         self.start_char_rect_index = None
+         self.start_char_page_index = None
+         self.last_char_rect_index = None
+@@ -1349,9 +1351,20 @@ class PdfViewerWidget(QWidget):
+         self.annot_action_sequence.append(annot_action)
+         self.annot_action_index += 1
+ 
+-    def annot_select_char_area(self, annot_type="highlight", text=None):
++    def annot_select_char_area(self, annot_type="highlight", text=None, color=None):
++        """Annotate the selection.  Return, for each page, its number, the
++        annotation id, the selected text and the height of the annotation in
++        percent of the page."""
++        # Painting the selection empties the quad cache, so rebuild it here.
++        self.update_select_obj_area()
++        quads_by_page = {page_index: [rect.quad for rect in rects]
++                         for page_index, rects in self.select_area_annot_quad_cache_dict.items()
++                         if rects}
+         self.cleanup_select()   # needs first cleanup select highlight mark.
+-        for page_index, quads in self.select_area_annot_quad_cache_dict.items():
++        if not quads_by_page:
++            return []
++        created = []
++        for page_index, quads in quads_by_page.items():
+             page = self.document[page_index]
+ 
+             if annot_type == "highlight":
+@@ -1372,14 +1385,40 @@ class PdfViewerWidget(QWidget):
+                 point = quads[-1].lr # lower right point
+                 new_annot = page.add_text_annot(point, text, icon="Note")
+ 
++            if color and annot_type != "text":
++                new_annot.set_colors(stroke=QColor(color).getRgbF()[0:3])
++                new_annot.update()
+             new_annot.set_info(title=self.user_name)
+             new_annot.parent = page
+ 
++            # A stable id in the PDF, so a note can link to this annotation.
++            annot_id = "eaf-" + uuid.uuid4().hex[:8]
++            self.document.document.xref_set_key(new_annot.xref, "NM", fitz.get_pdf_str(annot_id))
++            raw_page = page.page
++            created.append({
++                "page": page_index + 1,
++                "id": annot_id,
++                "text": " ".join(raw_page.get_textbox(quad.rect).strip() for quad in quads),
++                "percent": round(100 * quads[0].rect.y0 / raw_page.rect.height, 2)})
++
+             annot_action = AnnotAction.create_annot_action("Add", page_index, new_annot)
+             self.record_new_annot_action(annot_action)
+ 
+         self.document.saveIncr()
+         self.select_area_annot_quad_cache_dict.clear()
++        return created
++
++    def jump_to_annot_id(self, page_num, annot_id, percent):
++        """Jump to the annotation ANNOT_ID on page PAGE_NUM.  Without it, as
++        for ids pdf-tools made up at runtime, jump to PERCENT of the page."""
++        raw_page = self.document[page_num - 1].page
++        pos_y = raw_page.rect.height * percent / 100
++        for annot in raw_page.annots():
++            if annot.info.get("id") == annot_id:
++                pos_y = annot.rect.y0
++                break
++        self.save_current_pos()
++        self.jump_to_page(page_num, pos_y)
+ 
+     def annot_popup_text_annot(self, text=None):
+         (point, page_index) = self.popup_text_annot_pos
+@@ -1765,7 +1804,8 @@ class PdfViewerWidget(QWidget):
+             self.update()
+ 
+     def get_cursor_absolute_position(self, screen_pos=None):
+-        pos = self.mapFromGlobal(screen_pos if screen_pos is not None else QCursor.pos()) # map global coordinate to widget coordinate.
++        global_pos = screen_pos if screen_pos is not None else QCursor.pos()
++        pos = self.mapFromGlobal(global_pos - self.stale_global_offset) # map global coordinate to widget coordinate.
+         ex, ey = pos.x(), pos.y()
+         # set page coordinate
+         render_width = self.page_width * self.scale
+@@ -1817,6 +1857,15 @@ class PdfViewerWidget(QWidget):
+             return word_range[2]
+ 
+     def eventFilter(self, obj, event):
++        if (event.type() == QEvent.Type.MouseButtonPress or
++            (event.type() == QEvent.Type.MouseMove and event.buttons() == Qt.MouseButton.NoButton)):
++            # Qt does not see the window manager move the Emacs frame this view is
++            # embedded in, such as when a bar is toggled, so its global position
++            # goes stale.  Presses and hover moves carry the right local position,
++            # so measure the error from them.  Moves while dragging are computed
++            # from the stale position, so they must not reset it.
++            self.stale_global_offset = QCursor.pos() - self.mapToGlobal(event.position().toPoint())
++
+         if event.type() in [QEvent.Type.MouseButtonPress]:
+             self.is_button_press = True
+         elif event.type() in [QEvent.Type.MouseButtonRelease]:
