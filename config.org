@@ -439,7 +439,10 @@ Use the default browser when Zen is not installed."
   (load-theme 'doom-one t)
   (eval-after-load 'hl-line
     (set-face-attribute 'hl-line nil :inherit nil :background "#1c1e24"))
-  (set-face-attribute 'region nil :background "#4F5766"))
+  (set-face-attribute 'region nil :background "#4F5766")
+  (custom-theme-set-faces
+   'doom-one
+   '(gnus-group-news-low-empty ((t (:inherit gnus-group-mail-1-empty))))))
 #+end_src
 
 
