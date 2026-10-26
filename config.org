@@ -30,8 +30,6 @@
 
 * package
 
-+ [ ] after load with-eval-after-load
-
 ** use-package
 #+begin_src emacs-lisp
 (setq package-archives '(("melpa" . "https://melpa.org/packages/")
@@ -66,7 +64,6 @@
 Signal an error if the entire string was not used."
   (pcase-let ((`(,expr . ,offset) (read-from-string str)))
     (condition-case ()
-        ;; The call to `ignore' suppresses a compiler warning.
         (progn (ignore (read-from-string str offset))
                (error "Can't read whole string"))
       (end-of-file expr))))
@@ -85,7 +82,6 @@ Signal an error if the entire string was not used."
 #+end_src
 
 * miao
-
 #+begin_src emacs-lisp
 (use-package miao
   :load-path "~/Project/miao/"
@@ -272,15 +268,13 @@ Signal an error if the entire string was not used."
 (setq ring-bell-function 'ignore)
 
 (setq backup-directory-alist '(("." . "~/.emacs.d/backup"))
-  backup-by-copying t     ; Don't delink hardlinks
-  version-control t       ; Use version numbers on backups
-  delete-old-versions t   ; Automatically delete excess backups
-  kept-new-versions 20    ; how many of the newest versions to keep
-  kept-old-versions 5)    ; and how many of the old
+  backup-by-copying t
+  version-control t
+  delete-old-versions t
+  kept-new-versions 20
+  kept-old-versions 5)
 
-
-; lsp
-(setq read-process-output-max (* 1024 1024)) ;; 1mb
+(setq read-process-output-max (* 1024 1024))
 (setq gc-cons-threshold 100000000)
 
 (defun copy-buffer-path ()
@@ -362,7 +356,6 @@ Use the default browser when Zen is not installed."
    '("r r" . restart-emacs)))
 #+end_src
 
-
 ** long-line
 #+begin_src emacs-lisp
 (setq-default bidi-display-reordering nil)
@@ -380,10 +373,10 @@ Use the default browser when Zen is not installed."
 (setq initial-scratch-message nil)
 
 (blink-cursor-mode -1)
-(scroll-bar-mode -1)        ; disable visible scrollbar
-(tool-bar-mode -1)          ; disable the toolbar
-(tooltip-mode -1)           ; disable tooltips
-(menu-bar-mode -1)          ; disable the menu bar
+(scroll-bar-mode -1)
+(tool-bar-mode -1)
+(tooltip-mode -1)
+(menu-bar-mode -1)
 
 (setq scroll-conservatively 10000
       scroll-margin 3)
@@ -420,7 +413,6 @@ Use the default browser when Zen is not installed."
 (add-hook 'prog-mode-hook #'setup-line-numbers)
 (add-hook 'text-mode-hook #'setup-line-numbers)
 
-;; disable line numbers for some modes
 (dolist (mode '(term-mode-hook
                 vterm-mode-hook
                 dired-mode-hook
@@ -444,7 +436,6 @@ Use the default browser when Zen is not installed."
    'doom-one
    '(gnus-group-news-low-empty ((t (:inherit gnus-group-mail-1-empty))))))
 #+end_src
-
 
 ** color
 #+begin_src emacs-lisp
@@ -481,19 +472,9 @@ Use the default browser when Zen is not installed."
   (set-face-attribute 'default nil :height (* font-size 10)))
 
 (set-font-size 18)
-;; ;; FIXME
-;; (set-face-attribute 'default nil :font "SauceCodePro Nerd Font" :height 160)
-
-;; ;; Set the fixed pitch face
-;; (set-face-attribute 'fixed-pitch nil :font "SauceCodePro Nerd Font" :height 160)
-
-;; ;; Set the variable pitch face
-;; (set-face-attribute 'variable-pitch nil :font "DejaVuSansMono Nerd Font Mono" :height 160)
 #+end_src
 
-
 ** doom-modeline
-
 #+begin_src emacs-lisp
 (use-package doom-modeline
   :ensure t
@@ -515,12 +496,10 @@ Use the default browser when Zen is not installed."
 (use-package nerd-icons
   :ensure t)
 
-
 (use-package diredfl
   :ensure t
   :hook
   ((dired-mode . diredfl-mode)
-   ;; highlight parent and directory preview as well
    (dirvish-directory-view-mode . diredfl-mode))
   :config
   (set-face-attribute 'diredfl-dir-name nil :bold t))
@@ -620,7 +599,6 @@ kill the daemon."
    '("l L" . visual-fill-column-mode)))
 #+end_src
 
-
 ** which-key
 #+begin_src emacs-lisp
 (use-package which-key
@@ -663,7 +641,6 @@ kill the daemon."
   (keyfreq-autosave-mode 1))
 #+end_src
 
-
 ** symbol-overlay
 #+begin_src emacs-lisp
 (use-package symbol-overlay
@@ -694,20 +671,19 @@ kill the daemon."
   :ensure t
   :config
   (setq hl-todo-keyword-faces
-        '(("TODO"   . "#43cd80") ;;  2e8b57 00ee00 32cd32
+        '(("TODO"   . "#43cd80")
           ("PROG"   . "#44CCCC")
           ("FIXME"  . "#FF4444")
           ("REVIEW" . "#A020F0")
           ("HOLD"   . "#FFD700")
           ("NOTE"   . "#1E90FF")
           ("FAIL"   . "#EE6666")
-          ("DONE"   . "#808080"))) ;;
+          ("DONE"   . "#808080")))
   (add-hook 'org-mode-hook #'hl-todo-mode)
   (global-hl-todo-mode t))
 #+end_src
 
 ** goggles
-
 #+begin_src emacs-lisp
 (use-package goggles
   :ensure t
@@ -817,7 +793,6 @@ kill the daemon."
   (winum-mode t))
 #+end_src
 
-
 ** move-text
 #+begin_src emacs-lisp
 (use-package move-text
@@ -907,19 +882,13 @@ kill the daemon."
     '("m i" . iedit)))
 #+end_src
 
-
 ** tempel
 #+begin_src emacs-lisp
 (use-package tempel
   :ensure t
-  ;; Require trigger prefix before template name when completing.
   :demand t
   :custom
   (tempel-trigger-prefix "`")
-
-  ;; :bind (("<tab>" . tempel-complete))
-  ;; :bind (("M-+" . tempel-complete) ;; Alternative tempel-expand
-  ;;        ("M-*" . tempel-insert))
 
   :bind (:map tempel-map
          ("<return>" . tempel-next)
@@ -927,16 +896,7 @@ kill the daemon."
          ("C-M-g" . tempel-abort))
 
   :config
-
-  ;; Setup completion at point
   (defun tempel-setup-capf ()
-    ;; Add the Tempel Capf to `completion-at-point-functions'.
-    ;; `tempel-expand' only triggers on exact matches. Alternatively use
-    ;; `tempel-complete' if you want to see all matches, but then you
-    ;; should also configure `tempel-trigger-prefix', such that Tempel
-    ;; does not trigger too often when you don't expect it. NOTE: We add
-    ;; `tempel-expand' *before* the main programming mode Capf, such
-    ;; that it will be tried first.
     (setq-local completion-at-point-functions
                 (cons #'tempel-complete
                       completion-at-point-functions)))
@@ -944,11 +904,6 @@ kill the daemon."
   (add-hook 'conf-mode-hook 'tempel-setup-capf)
   (add-hook 'prog-mode-hook 'tempel-setup-capf)
   (add-hook 'text-mode-hook 'tempel-setup-capf))
-
-  ;; Optionally make the Tempel templates available to Abbrev,
-  ;; either locally or globally. `expand-abbrev' is bound to C-x '.
-  ;; (add-hook 'prog-mode-hook #'tempel-abbrev-mode)
-  ;; (global-tempel-abbrev-mode)
 
 (use-package lsp-snippet-tempel
   :ensure nil
@@ -976,7 +931,6 @@ kill the daemon."
         parinfer-rust-auto-download t))
 #+end_src
 
-
 ** vundo
 #+begin_src emacs-lisp
 (use-package vundo
@@ -988,16 +942,15 @@ kill the daemon."
 (use-package undo-fu
   :ensure t
   :config
-  (setq undo-limit        (* 64 (* 1024 1024))     ; 64 MB
-        undo-strong-limit (* 128 (* 1024 1024))    ; 128 MB
-        undo-outer-limit  (* 1024 (* 1024 1024)))) ; 1024 MB
+  (setq undo-limit        (* 64 (* 1024 1024))
+        undo-strong-limit (* 128 (* 1024 1024))
+        undo-outer-limit  (* 1024 (* 1024 1024))))
 
 (use-package undo-fu-session
   :ensure t
   :config
   (undo-fu-session-global-mode))
 #+end_src
-
 
 ** xclip
 #+begin_src emacs-lisp
@@ -1007,7 +960,6 @@ kill the daemon."
   (xclip-mode 1))
 #+end_src
 
-
 ** grammar
 #+begin_src emacs-lisp
 (use-package flycheck-vale
@@ -1015,7 +967,6 @@ kill the daemon."
   :config
   (flycheck-vale-setup))
 #+end_src
-
 
 ** atomic-chrome
 #+begin_src emacs-lisp
@@ -1032,7 +983,6 @@ kill the daemon."
 (use-package format-all
   :ensure t
   :config
-
   (defun format-all-set-c-formatter ()
     (let ((format-all-directory (file-name-directory (or (buffer-file-name) "~/"))))
       (setq retry 10)
@@ -1133,23 +1083,13 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 ** lsp
-
 #+begin_src emacs-lisp
 (use-package lsp-mode
   :ensure t
   :custom
-  (lsp-completion-provider :none) ;; we use Corfu!
-
-  ;; :init
-  ;; (defun orderless-dispatch-flex-first (_pattern index _total)
-  ;;   (and (eq index 0) 'orderless-flex))
+  (lsp-completion-provider :none)
 
   :config
-  ;; ;; Optionally configure the first word as flex filtered.
-  ;; (add-hook 'orderless-style-dispatchers #'orderless-dispatch-flex-first nil 'local)
-
-  ;; Optionally configure the cape-capf-buster.
-  ;; (setq-local completion-at-point-functions (list (cape-capf-buster #'lsp-completion-at-point)))
   (setq lsp-enable-file-watchers nil
         lsp-enable-on-type-formatting nil
         lsp-enable-indentation nil)
@@ -1204,7 +1144,6 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
    '("c l E" . lsp-treemacs-errors-list)))
 #+end_src
 
-
 *** consult-lsp
 #+begin_src emacs-lisp
 (use-package consult-lsp
@@ -1220,7 +1159,7 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
   :ensure t
   :hook (python-mode . (lambda ()
                           (require 'lsp-pyright)
-                          (lsp-deferred))))  ; or lsp-deferred
+                          (lsp-deferred))))
 #+end_src
 
 *** lsp-ui
@@ -1263,8 +1202,6 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
                 '(:harper-ls (:linters (:SpellCheck :json-false)
                               :dialect "American"))))
 
-;; LaTeX buffers run lsp-mode for texlab, so harper joins them there as an
-;; add-on rather than through eglot
 (use-package lsp-mode
   :defer t
   :config
@@ -1317,7 +1254,6 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
     '("c t b" . citre-jump-back)))
 #+end_src
 
-
 * language
 ** treesit
 #+begin_src emacs-lisp
@@ -1329,13 +1265,13 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
   (setq font-lock-defaults '(backtrace-font-lock-keywords)))
 
 (setq backtrace-font-lock-keywords
-      '(("^\\(#[0-9]+\\)" 1 font-lock-keyword-face)               ;; frame index
-        ("0x[0-9a-fA-F]+" . font-lock-constant-face)              ;; address
+      '(("^\\(#[0-9]+\\)" 1 font-lock-keyword-face)
+        ("0x[0-9a-fA-F]+" . font-lock-constant-face)
         ("\\((anonymous namespace)::\\|[a-zA-Z_<][a-zA-Z0-9_<>]*::\\)*\\([a-zA-Z_][a-zA-Z0-9_<>]*\\) *("
          . font-lock-function-name-face)
-        ("\\[[^]]+\\]" . font-lock-type-face)                     ;; memory region
-        ("\\([A-Za-z0-9_./-]+\\.\\(?:c\\|cc\\|cpp\\|cxx\\|C\\|h\\|hh\\|hpp\\|hxx\\):[0-9]+\\)" . font-lock-string-face)  ;; file:line
-        ("\\([A-Za-z0-9_:~]+\\) *=" 1 font-lock-variable-name-face)))        ;; arguments
+        ("\\[[^]]+\\]" . font-lock-type-face)
+        ("\\([A-Za-z0-9_./-]+\\.\\(?:c\\|cc\\|cpp\\|cxx\\|C\\|h\\|hh\\|hpp\\|hxx\\):[0-9]+\\)" . font-lock-string-face)
+        ("\\([A-Za-z0-9_:~]+\\) *=" 1 font-lock-variable-name-face)))
 
 (with-eval-after-load 'org
   (add-to-list 'org-src-lang-modes '("backtrace" . backtrace)))
@@ -1445,11 +1381,8 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 (use-package typescript-mode
   :ensure t
   :config
-  ;; (add-to-list 'major-mode-remap-alist '(typescript-mode . typescript-ts-mode))
-  ;; (setq typescript-ts-mode-indent-offset 4)
   (setq typescript-indent-level 4))
 #+end_src
-
 
 ** go
 #+begin_src emacs-lisp
@@ -1463,29 +1396,12 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
   :ensure nil
   :load-path (lambda () (file-name-directory (shell-command-to-string "agda-mode locate")))
   :config
-  ;; (load-file (let ((coding-system-for-read 'utf-8))
-  ;;              (shell-command-to-string "agda-mode locate")))
   (defun agda-setup-cape ()
     (with-eval-after-load 'cape
       (require 'cape-char)
       (cape-char--define agda "Agda" ?\\)
 
-      ;; ("equal" "≡"
-      ;;  "ra" "→"
-      ;;  "monus" "∸"
-      ;;  "\<>" "≡⟨⟩")
       (puthash "\\=<>" "≡⟨⟩" cape--agda-hash)
-      ;; (defun cape--agda-decode-map ()
-      ;;   (let ((hash (make-hash-table :test #'equal))
-      ;;         (decode-map (agda-input-get-translations "Agda")))
-      ;;     (pcase-dolist (`(,name . ,val) (cdr decode-map))
-      ;;       (when (memq (aref name 0) '(?\\))
-      ;;         (puthash
-      ;;          name
-      ;;          (if (vectorp val) (aref val 0) val) hash)))
-      ;;     hash))
-
-      ;; (defvar cape--agda-hash (cape--agda-decode-map))
 
       (deactivate-input-method)
       (setq completion-at-point-functions '(cape-agda cape-dabbrev))))
@@ -1510,7 +1426,6 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
   (setq fstar-executable "/home/yayu/.opam/ocaml-variants.4.14.0+options/bin/fstar.exe"))
 #+end_src
 
-
 ** sml
 #+begin_src emacs-lisp
 (use-package sml-mode
@@ -1518,7 +1433,6 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 ** codeql
-
 #+begin_src emacs-lisp
 (use-package emacs-codeql
   :ensure t
@@ -1533,7 +1447,6 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 ** latex
-
 #+begin_src emacs-lisp
 (use-package auctex
   :ensure auctex
@@ -1563,14 +1476,12 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
   :ensure t)
 #+end_src
 
-
 ** markdown
-
 #+begin_src emacs-lisp
 (use-package grip-mode
   :ensure t
   :config
-  (setq grip-command 'go-grip) ;; auto, grip, go-grip or mdopen
+  (setq grip-command 'go-grip)
   (miao-leader-define-major-keys 'org-mode
     '("m g" . grip-mode))
   (miao-leader-define-major-keys 'markdown-mode
@@ -1590,11 +1501,8 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 (use-package vertico
   :ensure t
   :init
-  ;; Grow and shrink the Vertico minibuffer
   (setq vertico-resize t)
-  ;; Optionally enable cycling for `vertico-next' and `vertico-previous'.
   (setq vertico-cycle t)
-  ;; Show more candidates
   (setq vertico-count 20)
 
   (defun crm-indicator (args)
@@ -1674,21 +1582,10 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 ** corfu
-
 #+begin_src emacs-lisp
 (use-package corfu
   :ensure t
-  ;; Optional customizations
   :config
-  ;; (corfu-cycle t)                ;; Enable cycling for `corfu-next/previous'
-  ;; (corfu-auto t)                 ;; Enable auto completion
-  ;; (corfu-separator ?\s)          ;; Orderless field separator
-  ;; (corfu-quit-at-boundary nil)   ;; Never quit at completion boundary
-  ;; (corfu-quit-no-match nil)      ;; Never quit, even if there is no match
-  ;; (corfu-preview-current nil)    ;; Disable current candidate preview
-  ;; (corfu-preselect 'prompt)      ;; Preselect the prompt
-  ;; (corfu-on-exact-match nil)     ;; Configure handling of exact matches
-  ;; (corfu-scroll-margin 5)        ;; Use scroll margin
   (setq corfu-auto t
         corfu-scroll-margin 5
         corfu-auto-prefix 1
@@ -1696,22 +1593,12 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
         corfu-separator ?\s
         corfu-auto-delay 0.3)
 
- ;; (defun corfu-enable-in-minibuffer ()
- ;;   "Enable Corfu in the minibuffer."
- ;;   (when (local-variable-p 'completion-at-point-functions)
- ;;     ;; (setq-local corfu-auto nil) ;; Enable/disable auto completion
- ;;     (setq-local corfu-echo-delay nil ;; Disable automatic echo and popup
- ;;                 corfu-popupinfo-delay nil)
- ;;     (corfu-mode 1)))
- ;; (add-hook 'minibuffer-setup-hook #'corfu-enable-in-minibuffer)
-
  (defun corfu-enable-always-in-minibuffer ()
   "Enable Corfu in the minibuffer if Vertico/Mct are not active."
   (unless (or (bound-and-true-p mct--active)
               (bound-and-true-p vertico--input)
               (eq (current-local-map) read-passwd-map))
-    ;; (setq-local corfu-auto nil) ;; Enable/disable auto completion
-    (setq-local corfu-echo-delay nil ;; Disable automatic echo and popup
+    (setq-local corfu-echo-delay nil
                 corfu-popupinfo-delay nil)
     (corfu-mode 1)))
  (add-hook 'minibuffer-setup-hook #'corfu-enable-always-in-minibuffer 1)
@@ -1722,14 +1609,7 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
             ("SPC" . corfu-insert-separator))
 
  (define-key corfu-map (kbd "RET") nil)
-  ;; Enable Corfu only for certain modes.
-  ;; :hook ((prog-mode . corfu-mode)
-  ;;        (shell-mode . corfu-mode)
-  ;;        (eshell-mode . corfu-mode))
 
-  ;; Recommended: Enable Corfu globally.  This is recommended since Dabbrev can
-  ;; be used globally (M-/).  See also the customization variable
-  ;; `global-corfu-modes' to exclude certain modes.
  (global-corfu-mode)
  (corfu-popupinfo-mode))
 
@@ -1746,53 +1626,23 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 ** cape
-
 #+begin_src emacs-lisp
 (use-package cape
   :ensure t
-  ;; Bind dedicated completion commands
-  ;; Alternative prefix keys: C-c p, M-p, M-+, ...
-  ;; :bind (("C-c p p" . completion-at-point) ;; capf
-  ;;        ("C-c p t" . complete-tag)        ;; etags
-  ;;        ("C-c p d" . cape-dabbrev)        ;; or dabbrev-completion
-  ;;        ("C-c p h" . cape-history)
-  ;;        ("C-c p f" . cape-file)
-  ;;        ("C-c p k" . cape-keyword)
-  ;;        ("C-c p s" . cape-elisp-symbol)
-  ;;        ("C-c p e" . cape-elisp-block)
-  ;;        ("C-c p a" . cape-abbrev)
-  ;;        ("C-c p l" . cape-line)
-  ;;        ("C-c p w" . cape-dict)
-  ;;        ("C-c p :" . cape-emoji)
-  ;;        ("C-c p \\" . cape-tex)
-  ;;        ("C-c p _" . cape-tex)
-  ;;        ("C-c p ^" . cape-tex)
-  ;;        ("C-c p &" . cape-sgml)
-  ;;        ("C-c p r" . cape-rfc1345))
   :config
   (setq cape-elisp-symbol-wrapper
         (assq-delete-all 'org-mode cape-elisp-symbol-wrapper))
 
-  ;; Add to the global default value of `completion-at-point-functions' which is
-  ;; used by `completion-at-point'.  The order of the functions matters, the
-  ;; first function returning a result wins.  Note that the list of buffer-local
-  ;; completion functions takes precedence over the global list.
   (add-to-list 'completion-at-point-functions #'cape-dabbrev)
   (add-to-list 'completion-at-point-functions #'cape-file)
   (add-to-list 'completion-at-point-functions #'cape-elisp-block)
-  ;;(add-to-list 'completion-at-point-functions #'cape-history)
   (add-to-list 'completion-at-point-functions #'cape-keyword)
-  ;; (add-to-list 'completion-at-point-functions #'cape-tex)
-  ;; (add-to-list 'completion-at-point-functions #'cape-sgml)
-  ;; (add-to-list 'completion-at-point-functions #'cape-rfc1345)
   (add-to-list 'completion-at-point-functions #'cape-abbrev)
   (add-to-list 'completion-at-point-functions #'cape-dict)
   (add-to-list 'completion-at-point-functions #'cape-elisp-symbol))
-  ;; (add-to-list 'completion-at-point-functions #'cape-line)
 #+end_src
 
 ** spell correction
-
 #+begin_src emacs-lisp
 (use-package jinx
   :ensure t
@@ -1869,12 +1719,9 @@ popup keeps completing the word being typed."
 #+end_src
 
 ** pl-symbols
-
 #+begin_src emacs-lisp
 (defvar pl-symbol-rules
-  '(;; (SYMBOL DESCRIPTION NAME...) -- first name is canonical
-    ;; reduction and evaluation
-    ("→"  "steps to (small-step)"        "stepsto" "steps" "to" "->")
+  '(("→"  "steps to (small-step)"        "stepsto" "steps" "to" "->")
     ("⟶"  "reduces to"                   "reduces" "longto" "-->")
     ("⟶*" "reduces in zero or more steps" "multistep" "steps*" "rtc")
     ("⇓"  "evaluates to (big-step)"      "evalsto" "evaluates" "bigstep" "Down")
@@ -1886,19 +1733,16 @@ popup keeps completing the word being typed."
     ("←"  "from"                         "from" "<-")
     ("↑"  "up"                           "uparrow")
     ("↓"  "down"                         "downarrow")
-    ;; implication
     ("⇒"  "implies"                      "implies" "=>")
     ("⇐"  "follows from"                 "followsfrom" "Leftarrow")
     ("⇔"  "if and only if"               "iff" "<=>")
     ("⟹"  "implies (long)"               "Longto" "==>")
-    ;; judgments
     ("⊢"  "entails; derives (provable)"  "entails" "derives" "proves" "vdash" "|-")
     ("⊨"  "satisfies; models (semantic)" "satisfies" "models" "vDash" "|=")
     ("⊬"  "does not derive"              "nentails" "nvdash")
     ("⊭"  "does not satisfy"             "nmodels")
     ("⊩"  "forces (Kripke, realizability)" "forces" "Vdash")
     ("⊣"  "is left adjoint to"           "adjoint" "dashv")
-    ;; equality and equivalence
     ("≡"  "definitionally equal"         "equiv" "==" "identical")
     ("≢"  "not equivalent"               "nequiv")
     ("≜"  "is defined as"                "defas" "defined" "triangleq")
@@ -1907,7 +1751,6 @@ popup keeps completing the word being typed."
     ("≃"  "equivalent"                   "simeq" "weakequiv")
     ("≅"  "isomorphic"                   "iso" "isomorphic" "cong")
     ("≠"  "not equal"                    "neq" "/=")
-    ;; orders and lattices
     ("⊑"  "approximates (domain order)"  "approximates" "lessdefined" "sqsubseteq")
     ("⊒"  "is approximated by"           "sqsupseteq")
     ("⊏"  "strictly approximates"        "sqsubset")
@@ -1922,7 +1765,6 @@ popup keeps completing the word being typed."
     ("≻"  "succeeds"                     "succ")
     ("⪯"  "is simulated by"              "simulatedby" "preceq")
     ("⪰"  "simulates"                    "simulates" "succeq")
-    ;; logic
     ("∀"  "for all"                      "forall" "all")
     ("∃"  "there exists"                 "exists" "ex")
     ("∄"  "there is no"                  "nexists")
@@ -1931,7 +1773,6 @@ popup keeps completing the word being typed."
     ("∨"  "disjunction (or)"             "or" "vee")
     ("⊤"  "top; true"                    "top" "true")
     ("⊥"  "bottom; false; divergence"    "bot" "bottom" "false" "undefined")
-    ;; sets
     ("∈"  "is a member of"               "in" "member" "elem")
     ("∉"  "is not a member of"           "notin")
     ("∋"  "contains element"             "ni")
@@ -1945,7 +1786,6 @@ popup keeps completing the word being typed."
     ("∖"  "set difference"               "setminus" "difference")
     ("⊎"  "disjoint union"               "disjointunion" "uplus")
     ("×"  "cartesian product; pair type" "cross" "times" "pairtype")
-    ;; connectives and structure
     ("∘"  "function composition"         "compose" "comp" "circ")
     ("⊕"  "coproduct; direct sum"        "coproduct" "oplus" "choice")
     ("⊗"  "tensor; multiplicative conj"  "tensor" "otimes")
@@ -1954,16 +1794,13 @@ popup keeps completing the word being typed."
     ("-∗" "separating implication (wand)" "wand" "magicwand")
     ("∥"  "parallel composition"         "par" "parallel")
     ("·"  "concatenation; application"   "cdot" "concat")
-    ;; modal and step-indexed
     ("□"  "always; persistently"         "always" "box" "persistently")
     ("◇"  "eventually; possibly"         "eventually" "diamond" "possibly")
     ("▷"  "later (step-indexed)"         "later" "triangleright")
-    ;; binders and fixpoints
     ("λ"  "lambda abstraction"           "lambda" "lam" "fn")
     ("Λ"  "type abstraction (big lambda)" "tyabs" "Lambda")
     ("μ"  "least fixpoint; recursive type" "lfp" "mu" "rec")
     ("ν"  "greatest fixpoint; restriction" "gfp" "nu" "restrict")
-    ;; metavariables with conventional roles
     ("Γ"  "typing context"               "ctx" "context" "Gamma")
     ("Δ"  "second context"               "Delta")
     ("Σ"  "signature; store; dependent sum" "Sigma" "sig" "store")
@@ -1991,7 +1828,6 @@ popup keeps completing the word being typed."
     ("Φ"  "Phi"                          "Phi")
     ("Ψ"  "Psi"                          "Psi")
     ("Ω"  "Omega; nontermination"        "Omega")
-    ;; brackets
     ("⟦"  "denotation bracket, open"     "denot" "[[" "semopen")
     ("⟧"  "denotation bracket, close"    "]]" "semclose")
     ("⟨"  "configuration/tuple, open"    "config" "tuple" "langle")
@@ -2002,14 +1838,12 @@ popup keeps completing the word being typed."
     ("⌉"  "ceiling, close"               "rceil")
     ("⌊"  "floor, open; erasure"         "lfloor")
     ("⌋"  "floor, close"                 "rfloor")
-    ;; number sets
     ("ℕ"  "natural numbers"              "nat" "NN")
     ("ℤ"  "integers"                     "integers" "ZZ")
     ("ℚ"  "rationals"                    "rationals" "QQ")
     ("ℝ"  "reals"                        "reals" "RR")
     ("ℂ"  "complex numbers"              "CC")
     ("𝔹"  "booleans"                     "bool" "BB")
-    ;; misc
     ("∎"  "end of proof (QED)"           "qed" "tombstone")
     ("⋯"  "horizontal ellipsis"          "cdots")
     ("⋮"  "vertical ellipsis"            "vdots")
@@ -2052,8 +1886,6 @@ SYMBOL after a \\ prefix; the first NAME is the canonical one.")
   (condition-case err
       (progn
         (require 'cape-char)
-        ;; Invert the TeX input method (\\alpha -> α) to get α -> \\alpha,
-        ;; reusing the same authoritative data that backs `cape-tex'.
         (let ((fwd (cape-char--translation "TeX" '(?\\)))
               (rev (make-hash-table :test #'equal)))
           (when fwd
@@ -2070,7 +1902,6 @@ SYMBOL after a \\ prefix; the first NAME is the canonical one.")
   "LaTeX commands for SYM: manual overrides first, then TeX-derived."
   (delete-dups
    (append (cdr (assoc sym pl-symbol-latex-overrides))
-           ;; \\Bbb{N} is redundant with the nicer \\mathbb{N} override.
            (seq-remove (lambda (n) (string-match-p "Bbb" n))
                        (reverse (gethash sym pl-symbol--tex-reverse))))))
 
@@ -2083,7 +1914,6 @@ two concept names that disagree."
   (clrhash pl-symbol-doc-hash)
   (clrhash pl-symbol-alias-hash)
   (clrhash pl-symbol-latex-hash)
-  ;; Pass 1: concept names (authoritative).
   (pcase-dolist (`(,sym ,desc . ,names) pl-symbol-rules)
     (dolist (name names)
       (let ((key (concat "\\" name)))
@@ -2093,7 +1923,6 @@ two concept names that disagree."
         (puthash key sym pl-symbol-hash)
         (puthash key desc pl-symbol-doc-hash)))
     (puthash sym (mapcar (lambda (n) (concat "\\" n)) names) pl-symbol-alias-hash))
-  ;; Pass 2: LaTeX commands (added only where the key is still free).
   (pcase-dolist (`(,sym ,desc . ,_names) pl-symbol-rules)
     (let ((latex (pl-symbol--latex-for sym)))
       (puthash sym latex pl-symbol-latex-hash)
@@ -2153,7 +1982,6 @@ two concept names that disagree."
   (if interactive
       (let (completion-cycle-threshold)
         (cape-interactive #'pl-symbol-capf))
-    ;; In TeX buffers \alpha should stay \alpha, not become α.
     (unless (derived-mode-p 'tex-mode 'latex-mode)
       (when (looking-back "\\\\[^ \n\t]*" (pos-bol))
         (let ((beg (match-beginning 0))
@@ -2165,10 +1993,8 @@ two concept names that disagree."
              (when (string-prefix-p tok nm)
                (let ((desc (gethash nm pl-symbol-doc-hash))
                      (i 0))
-                 ;; glyph row
                  (puthash nm (list sym sym desc :sym) pl-symbol--dyn)
                  (push nm cands)
-                 ;; LaTeX literal rows, kept unique with zero-width spaces
                  (dolist (l (gethash sym pl-symbol-latex-hash))
                    (let ((key (concat nm (make-string (setq i (1+ i))
                                                       pl-symbol--zwsp))))
@@ -2367,23 +2193,11 @@ two concept names that disagree."
 #+end_src
 
 ** marginalia
-- Enable rich annotations using the Marginalia package
-
 #+begin_src emacs-lisp
 (use-package marginalia
   :ensure t
-  ;; Bind `marginalia-cycle' locally in the minibuffer.  To make the binding
-  ;; available in the *Completions* buffer, add it to the
-  ;; `completion-list-mode-map'.
-  ;; :bind (:map minibuffer-local-map
-  ;;        ("M-A" . marginalia-cycle))
 
-  ;; The :init section is always executed.
   :config
-
-  ;; Marginalia must be activated in the :init section of use-package such that
-  ;; the mode gets enabled right away. Note that this forces loading the
-  ;; package.
   (marginalia-mode))
 #+end_src
 * org
@@ -2659,9 +2473,7 @@ two concept names that disagree."
   :ensure t
   :config
   (setq org-auto-align-tags nil
-        ;; org-tags-column 0
         org-catch-invisible-edits 'show-and-error
-        ;; Org styling, hide markup etc.
         org-modern-block-name t
         org-modern-progress nil
         org-modern-star '("◉")
@@ -2709,8 +2521,6 @@ two concept names that disagree."
         org-appear-autokeywords t
         org-appear-inside-latex t))
 #+end_src
-
-
 
 ** alert
 #+begin_src emacs-lisp
@@ -2877,9 +2687,7 @@ With a prefix ARG kill the active timer."
   (setq org-mind-map/rankdir "LR"))
 #+end_src
 
-
 * magit
-
 #+begin_src emacs-lisp
 (use-package magit
   :ensure t
@@ -2918,37 +2726,25 @@ With a prefix ARG kill the active timer."
 #+begin_src emacs-lisp
 (use-package diff-hl
   :ensure t
-  ;; :custom-face
-  ;; (diff-hl-change ((t (:inherit custom-changed :foreground unspecified :background unspecified))))
-  ;; (diff-hl-insert ((t (:inherit diff-added :background unspecified))))
-  ;; (diff-hl-delete ((t (:inherit diff-removed :background unspecified))))
-  ;; :bind (:map diff-hl-command-map
-  ;;        ("SPC" . diff-hl-mark-hunk))
   :hook ((after-init . global-diff-hl-mode)
          (dired-mode . diff-hl-dired-mode))
   :init (setq diff-hl-draw-borders nil)
   :config
-  ;; Highlight on-the-fly
   (diff-hl-flydiff-mode t)
 
-  ;; Set fringe style
   (setq-default fringes-outside-margins t)
 
   (unless (display-graphic-p)
-    ;; Fall back to the display margin since the fringe is unavailable in tty
     (diff-hl-margin-mode t)
-    ;; Avoid restoring `diff-hl-margin-mode'
     (with-eval-after-load 'desktop
       (add-to-list 'desktop-minor-mode-table
                    '(diff-hl-margin-mode nil))))
 
-  ;; Integration with magit
   (with-eval-after-load 'magit
     (add-hook 'magit-pre-refresh-hook #'diff-hl-magit-pre-refresh)
     (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh)))
 #+end_src
 * shell
-
 #+begin_src emacs-lisp
 (setq sh-shell "/bin/zsh")
 #+end_src
@@ -2975,7 +2771,6 @@ With a prefix ARG kill the active timer."
 #+end_src
 
 * project
-
 #+begin_src emacs-lisp
 (use-package project
   :init
@@ -3105,17 +2900,12 @@ variable `project-local-identifier' to be considered a project."
    '("p %" . project-query-replace-regexp)))
 #+end_src
 
-
 ** workspace
 
 *** persp-mode
 #+begin_src emacs-lisp
 (use-package persp-mode
   :ensure t
-  ;; :custom
-  ;; (persp-mode-prefix-key nil)
-  ;; (persp-sort 'created)
-  ;; (persp-modestring-short t)
   :config
   (setq persp-previous-persp-name nil)
   (setq persp-nil-name "default")
@@ -3131,7 +2921,6 @@ variable `project-local-identifier' to be considered a project."
       (funcall orig frame parameter value)))
   (advice-add 'set-frame-parameter :around #'persp-skip-dead-frame-lighter)
 
-  ;; FIXME
   (defun treemacs--remove-treemacs-window-in-new-frames (location-type _frame-or-window _persp)
     (when (eq location-type 'frame)
       (-when-let (w (--first (treemacs-is-treemacs-window? it)
@@ -3168,14 +2957,12 @@ variable `project-local-identifier' to be considered a project."
     (let* ((root (file-truename (directory-file-name project-root)))
            (leaf (file-name-nondirectory root)))
       (or
-       ;; Already have a persp for this exact root — reuse it.
        (cl-some (lambda (name)
                   (let ((p (persp-get-by-name name)))
                     (when (and (perspective-p p)
                                (equal (persp-parameter 'project-root p) root))
                       name)))
                 persp-names-cache)
-       ;; Leaf taken by *another* project persp? Rename it, qualify ours.
        (let* ((existing (persp-get-by-name leaf))
               (existing-root (and (perspective-p existing)
                                   (persp-parameter 'project-root existing))))
@@ -3183,9 +2970,7 @@ variable `project-local-identifier' to be considered a project."
           ((and existing-root (not (equal existing-root root)))
            (persp-rename (persp-qualified-name existing-root) existing)
            (persp-qualified-name root))
-          ;; Leaf taken by a non-project persp — just qualify ours.
           ((perspective-p existing) (persp-qualified-name root))
-          ;; Free.
           (t leaf))))))
 
  (defun project-switch-project (dir)
@@ -3251,7 +3036,6 @@ variable `project-local-identifier' to be considered a project."
  (miao-leader-define-keys
   '("f p" . open-config-file)
   '("f P" . open-config-persp)
-  ;; '("w b" . persp-scratch-buffer)
   '("TAB TAB" . persp-switch)
   '("TAB p" . persp-prev)
   '("TAB n" . persp-next)
@@ -3272,29 +3056,13 @@ variable `project-local-identifier' to be considered a project."
  (persp-mode t))
 #+end_src
 
-
 * pdf
 ** eaf-pdf-viewer
-EAF and its pdf-viewer app are cloned into =site-lisp/emacs-application-framework=
-(with the app at =app/pdf-viewer=), and the Python deps live in the
-=site-lisp/eaf-venv= venv:
-=pip install PyQt6 PyQt6-WebEngine PyQt6-sip pymupdf packaging epc sexpdata==1.0.0 tld lxml=.
-
-=find-file= on a PDF opens it in EAF. Paper notes are tied to PDF pages
-through eaf-interleave (see org-literature).
-
-The pdf-viewer app carries =eaf-patches/eaf-pdf-viewer.patch=, made against
-upstream 5b9ea37. It makes highlight and squiggly annotations work, keeps
-mouse selection aligned when dwm moves the frame (such as toggling the bar),
-and adds =add_annot_styled= and =jump_to_annot_id= for =org-literature-annotate=.
-After updating the app: =git -C app/pdf-viewer apply ~/.emacs.d/eaf-patches/eaf-pdf-viewer.patch=.
 #+begin_src emacs-lisp
 (use-package eaf
   :load-path "~/.emacs.d/site-lisp/emacs-application-framework"
   :demand t
   :init
-  ;; emacs-wayland (PGTK) under X11: EAF reads `pgtk' as Wayland and places
-  ;; views through GNOME Shell. Use X11 reparenting there instead.
   (defun eaf-pgtk-x11-p (&optional frame)
     (and (eq (framep (or frame (selected-frame))) 'pgtk)
          (not (getenv "WAYLAND_DISPLAY" frame))))
@@ -3358,14 +3126,10 @@ gets that window's size."
 
   (require 'eaf-pdf-viewer)
   (eaf-bind-key miao-leader "SPC" eaf-pdf-viewer-keybinding)
-  ;; Double-click calls back into these: left jumps to the TeX source (or
-  ;; dumps the page text when there is no synctex), right translates.
-  ;; Ignore those calls but keep M-x eaf-pdf-extract-page-text working.
   (advice-add 'eaf-pdf-synctex-backward-edit :override #'ignore)
   (advice-add 'eaf-pdf-extract-page-text :before-until
               (lambda (&optional page-text &rest _) page-text))
   (advice-add 'eaf-translate-text :override #'ignore)
-  ;; Web links in a PDF go to EAF's browser app, which is not installed.
   (unless (locate-library "eaf-browser")
     (defun eaf-open-browser (url &rest _)
       "Open URL from an EAF app in the default browser."
@@ -3561,11 +3325,11 @@ gets that window's size."
   :ensure nil
   :load-path (lambda ()
                (cond
-                ((string-equal system-type "windows-nt") ; windows
+                ((string-equal system-type "windows-nt")
                  "")
-                ((string-equal system-type "darwin") ; macOS
+                ((string-equal system-type "darwin")
                  "/opt/homebrew/Cellar/mu/1.10.7/share/emacs/site-lisp/mu/mu4e/")
-                ((string-equal system-type "gnu/linux") ; linux
+                ((string-equal system-type "gnu/linux")
                  (cond
                    ((file-directory-p "/usr/local/share/emacs/site-lisp/mu4e/") "/usr/local/share/emacs/site-lisp/mu4e/")
                    ((file-directory-p "/usr/share/emacs/site-lisp/mu4e/") "/usr/share/emacs/site-lisp/mu4e/")))))
@@ -3595,7 +3359,6 @@ gets that window's size."
                          (end (- (search-forward (concat "--" boundary)) (+ (length boundary) 3))))
 
                      (substring file-contents start end)))))
-
 
             ("text"
              nil))))))
@@ -3632,7 +3395,6 @@ return the filename."
               (email (when (cdr c)
                        (replace-regexp-in-string "[[:cntrl:]]" "" (cdr c))))
               (addr (if name (format "%s <%s>" name email) email))
-              ;; Escape HTML entities
               (addr (replace-regexp-in-string "&" "&amp;" addr))
               (addr (replace-regexp-in-string "<" "&lt;" addr))
               (addr (replace-regexp-in-string ">" "&gt;" addr)))
@@ -4041,7 +3803,6 @@ Move to the previous message when BACKWARDS is non-nil."
    '("c a" . open-calendar-agenda)))
 #+end_src
 
-
 ** google calendar
 #+begin_src emacs-lisp
 (use-package org-gcal
@@ -4137,7 +3898,6 @@ Move to the previous message when BACKWARDS is non-nil."
     (or (gethash (oauth2-auto--compute-id username provider) oauth2-auto--plstore-cache)
         (funcall orig username provider))))
 #+end_src
-
 
 * rime
 #+begin_src emacs-lisp
