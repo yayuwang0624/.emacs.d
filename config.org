@@ -966,24 +966,6 @@ kill the daemon."
   :after tempel)
 #+end_src
 
-** yasnippet
-
-#+begin_src emacs-lisp :tangle no
-(use-package yasnippet
-  :ensure t
-  :config
-  (add-to-list 'yas-snippet-dirs (concat (file-truename user-emacs-directory) "yasnippets"))
-  (yas-load-directory (concat (file-truename user-emacs-directory) "/yasnippets"))
-  (add-to-list 'warning-suppress-types '(yasnippet backquote-change))
-  (add-hook 'prog-mode-hook #'yas-minor-mode)
-  (add-hook 'latex-mode-hook #'yas-minor-mode)
-  (add-hook 'org-mode-hook #'yas-minor-mode))
-
-(use-package yasnippet-snippets
-  :after yasnippet
-  :ensure t)
-#+end_src
-
 ** parinfer-rust
 #+begin_src emacs-lisp
 (use-package parinfer-rust-mode
@@ -994,11 +976,6 @@ kill the daemon."
         parinfer-rust-auto-download t))
 #+end_src
 
-
-** objed
-#+begin_src emacs-lisp :tangle no
-(use-package objed)
-#+end_src
 
 ** vundo
 #+begin_src emacs-lisp
@@ -1065,15 +1042,15 @@ kill the daemon."
         (setq format-all-directory (concat format-all-directory "../")))
       (setq-local format-all-formatters `(("C" (clang-format ,(concat "-style=file:" (concat format-all-directory ".clang-format"))))))))
 
-  (define-format-all-formatter tex-fmt
-    (:executable "tex-fmt")
-    (:install "cargo install tex-fmt")
+  (define-format-all-formatter latexindent
+    (:executable "latexindent")
+    (:install "pacman -S texlive-binextra")
     (:languages "LaTeX")
     (:features)
-    (:format (format-all--buffer-easy executable "-s")))
+    (:format (format-all--buffer-easy executable "-m" "-g" "/dev/null")))
 
   (defun format-all-set-tex-formatter ()
-    (setq format-all-formatters `(("tex" (tex-fmt)))))
+    (setq format-all-formatters `(("LaTeX" (latexindent)))))
 
   (defvar bibtex-tidy-arguments
     '("-y" "bibtex-tidy@1.15.1"
@@ -1109,11 +1086,7 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
   (miao-leader-define-keys
       '("c f" . format-all-buffer))
   (miao-leader-define-major-keys 'LaTeX-mode
-    '("c f" . (lambda ()
-                (interactive)
-                (lsp-disconnect)
-                (LaTeX-fill-buffer t)
-                (lsp)))))
+    '("c f" . format-all-buffer)))
 #+end_src
 
 ** bibtex
@@ -1142,6 +1115,16 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
  (ansi-color-apply-on-region compilation-filter-start (point))
  (read-only-mode))
 (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
+
+(defun compilation-close-window-on-success (buffer status)
+  "Close the window of compilation BUFFER one second after STATUS reports success."
+  (when (and (eq (buffer-local-value 'major-mode buffer) 'compilation-mode)
+             (string-prefix-p "finished" status))
+    (run-at-time 1 nil
+                 (lambda ()
+                   (dolist (window (get-buffer-window-list buffer nil t))
+                     (quit-window nil window))))))
+(add-hook 'compilation-finish-functions #'compilation-close-window-on-success)
 #+end_src
 ** checking
 #+begin_src emacs-lisp
@@ -1232,31 +1215,12 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 *** lsp-pyright
-#+begin_src emacs-lisp :tangle no
+#+begin_src emacs-lisp
 (use-package lsp-pyright
   :ensure t
   :hook (python-mode . (lambda ()
                           (require 'lsp-pyright)
                           (lsp-deferred))))  ; or lsp-deferred
-#+end_src
-
-*** lsp-java
-#+begin_src emacs-lisp :tangle no
-(use-package lsp-java
-  :ensure t
-  :config
-  (add-hook 'java-mode-hook #'lsp)
-  (add-hook 'dap-stopped-hook
-          (lambda (arg) (call-interactively #'dap-hydra)))
-  (setq lsp-java-format-on-type-enabled nil)
-  (setq lsp-java-format-comments-enabled nil)
-  (setq lsp-java-java-path "/usr/lib/jvm/java-21-openjdk/bin/java")
-  (setq lsp-java-configuration-runtimes '[(:name "JavaSE-1.8"
-                                           :path "/usr/lib/jvm/java-8-openjdk/"
-                                           :default t)
-                                          (:name "JavaSE-11"
-                                              :path "/usr/lib/jvm/java-11-openjdk")])
-  (setq lsp-java-vmargs '("-XX:+UseParallelGC" "-XX:GCTimeRatio=4" "-XX:AdaptiveSizePolicyWeight=90" "-Dsun.zip.disableMemoryMapping=true" "-Xmx4G" "-Xms100m")))
 #+end_src
 
 *** lsp-ui
@@ -1313,6 +1277,12 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
     :activation-fn (lsp-activate-on "latex")
     :add-on? t
     :server-id 'harper-ls
+    :request-handlers (lsp-ht
+                       ("workspace/configuration"
+                        (lambda (_workspace params)
+                          (apply #'vector
+                                 (mapcar (lambda (_item) (lsp-configuration-section "harper-ls"))
+                                         (lsp:configuration-params-items params))))))
     :initialized-fn (lambda (workspace)
                       (with-lsp-workspace workspace
                         (lsp--set-configuration
@@ -1382,15 +1352,6 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 (use-package cmake-mode
   :ensure t)
 #+end_src
-
-** python
-#+begin_src emacs-lisp :tangle no
-(use-package elpy
-  :ensure t
-  :init
-  (elpy-enable))
-#+end_src
-
 
 ** proof-general
 #+begin_src emacs-lisp
@@ -1497,7 +1458,7 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+end_src
 
 ** agda
-#+begin_src emacs-lisp :tangle no
+#+begin_src emacs-lisp
 (use-package agda2
   :ensure nil
   :load-path (lambda () (file-name-directory (shell-command-to-string "agda-mode locate")))
@@ -1558,7 +1519,7 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 
 ** codeql
 
-#+begin_src emacs-lisp :tangle no
+#+begin_src emacs-lisp
 (use-package emacs-codeql
   :ensure t
   :vc (:url "https://github.com/anticomputer/emacs-codeql.git" :branch "main")
@@ -1584,7 +1545,9 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
   (setq TeX-view-program-list '(("EAF" eaf-pdf-synctex-forward-view))
         TeX-view-program-selection '((output-pdf "EAF"))
         TeX-source-correlate-start-server t)
-  (add-hook 'TeX-after-compilation-finished-functions #'TeX-revert-document-buffer))
+  (add-hook 'TeX-after-compilation-finished-functions #'TeX-revert-document-buffer)
+  (with-eval-after-load 'tex
+    (keymap-set TeX-mode-map "C-M-i" #'completion-at-point)))
 #+end_src
 
 #+begin_src emacs-lisp
@@ -1897,11 +1860,12 @@ popup keeps completing the word being typed."
 
   (defun spell-correction-setup-capf ()
     "Put `spell-correction-capf' first in the buffer while jinx runs."
-    (if jinx-mode
-        (add-hook 'completion-at-point-functions #'spell-correction-capf -90 t)
-      (remove-hook 'completion-at-point-functions #'spell-correction-capf t)))
+    (remove-hook 'completion-at-point-functions #'spell-correction-capf t)
+    (when (bound-and-true-p jinx-mode)
+      (add-hook 'completion-at-point-functions #'spell-correction-capf -90 t)))
 
-  (add-hook 'jinx-mode-hook #'spell-correction-setup-capf))
+  (add-hook 'jinx-mode-hook #'spell-correction-setup-capf)
+  (add-hook 'lsp-completion-mode-hook #'spell-correction-setup-capf))
 #+end_src
 
 ** pl-symbols
@@ -2705,6 +2669,30 @@ two concept names that disagree."
                           (?- . "–")
                           (?* . "▸")))
   (global-org-modern-mode))
+
+(defconst org-lowercase-checkbox-re
+  "^[ \t]*\\(?:[-+*]\\|\\(?:[0-9]+\\|[A-Za-z]\\)[.)]\\)[ \t]+\\(?:\\[@[^]\n]+\\][ \t]*\\)?\\[\\(x\\)\\]")
+
+(defun org-upcase-checkbox-at-line ()
+  (when (memq last-command-event '(?x ?\]))
+    (save-excursion
+      (beginning-of-line)
+      (let ((case-fold-search nil))
+        (when (looking-at org-lowercase-checkbox-re)
+          (replace-match "X" t t nil 1))))))
+
+(defun org-upcase-checkboxes ()
+  (save-excursion
+    (goto-char (point-min))
+    (let ((case-fold-search nil))
+      (while (re-search-forward org-lowercase-checkbox-re nil t)
+        (replace-match "X" t t nil 1)))))
+
+(defun org-setup-lowercase-checkboxes ()
+  (add-hook 'post-self-insert-hook #'org-upcase-checkbox-at-line nil t)
+  (add-hook 'before-save-hook #'org-upcase-checkboxes nil t))
+
+(add-hook 'org-mode-hook #'org-setup-lowercase-checkboxes)
 #+end_src
 
 ** org-appear
@@ -2723,23 +2711,6 @@ two concept names that disagree."
 #+end_src
 
 
-
-** org-noter
-#+begin_src emacs-lisp :tangle no
-(use-package org-noter
-  :ensure t
-  :init
-  (setq org-noter-notes-search-path (list org-literature-notes-directory)
-        org-noter-default-notes-file-names '()
-        org-noter-find-additional-notes-functions '(org-literature-note-for-document))
-  (setq org-noter-always-create-frame nil
-        org-noter-notes-window-location 'other-frame)
-  (setq org-noter-max-short-selected-text-length most-positive-fixnum)
-  (setq org-noter-doc-split-fraction '(0.6 . 0.4))
-  :config
-  (miao-leader-define-major-keys '(org-mode pdf-view-mode)
-    '("n o" . org-noter)))
-#+end_src
 
 ** alert
 #+begin_src emacs-lisp
@@ -3303,21 +3274,6 @@ variable `project-local-identifier' to be considered a project."
 
 
 * pdf
-** pdf-tools
-#+begin_src emacs-lisp :tangle no
-(use-package pdf-tools
-  :ensure t
-  :config
-  (pdf-tools-install)
-  (add-hook 'pdf-view-mode-hook 'auto-revert-mode)
-  (add-hook 'pdf-view-mode-hook #'pdf-view-roll-minor-mode)
-  (set-face-attribute 'pdf-view-region nil :inherit 'highlight)
-  (bind-keys :map pdf-view-mode-map
-             ("C-a" . pdf-view-align-left)
-             ("C-e" . pdf-view-align-right)
-             ("C-l" . pdf-view-center-in-window)))
-#+end_src
-
 ** eaf-pdf-viewer
 EAF and its pdf-viewer app are cloned into =site-lisp/emacs-application-framework=
 (with the app at =app/pdf-viewer=), and the Python deps live in the
@@ -3380,6 +3336,26 @@ EAF activates the first X window of the Emacs PID, which can be a dialog."
   :custom
   (eaf-python-command (expand-file-name "site-lisp/eaf-venv/bin/python" user-emacs-directory))
   :config
+  (defun eaf-follow-selected-frame (&rest _)
+    "Make the selected top-level frame `eaf-emacs-frame'.
+EAF updates its views only while the frame it started in is selected."
+    (unless (frame-parent)
+      (setq eaf-emacs-frame (window-frame))))
+  (advice-add 'eaf--monitor-configuration-change-now :before #'eaf-follow-selected-frame)
+
+  (defun eaf-largest-window-size (buffer-id)
+    "Return the allocation of the largest visible window showing BUFFER-ID.
+EAF uses `get-buffer-window', which sees only the selected frame and
+falls back to the selected window, so a buffer shown in another frame
+gets that window's size."
+    (let* ((buffer (eaf-get-buffer buffer-id))
+           (windows (and buffer (get-buffer-window-list buffer nil 'visible))))
+      (eaf-get-window-allocation
+       (car (sort windows
+                  :key (lambda (window) (* (window-pixel-width window) (window-pixel-height window)))
+                  :reverse t)))))
+  (advice-add 'eaf-get-window-size-by-buffer-id :override #'eaf-largest-window-size)
+
   (require 'eaf-pdf-viewer)
   (eaf-bind-key miao-leader "SPC" eaf-pdf-viewer-keybinding)
   ;; Double-click calls back into these: left jumps to the TeX source (or
@@ -3406,11 +3382,75 @@ EAF activates the first X window of the Emacs PID, which can be a dialog."
   (citar-library-paths (list org-literature-pdf-directory))
   (citar-notes-paths (list org-literature-notes-directory))
   (citar-note-format-function #'org-literature-format-note)
+  (citar-display-transform-functions
+   '((sn . (citar--shorten-names))
+     (etal . (citar--shorten-names 3 "&"))
+     (venue . (citar-venue-abbreviation))))
+  (citar-templates
+   '((main . "${author editor:30%sn}     ${date year issued:4}     ${title:48}")
+     (suffix . "          ${booktitle journal journaltitle:14%venue}    ${=key= id:15}    ${tags keywords keywords:*}")
+     (preview . "${author editor:%etal} (${year issued date}) ${title}, ${booktitle journal journaltitle publisher container-title collection-title}.\n")
+     (note . "Notes on ${author editor:%etal}, ${title}")))
   (org-cite-global-bibliography (list org-literature-bibliography))
   (org-cite-insert-processor 'citar)
   (org-cite-follow-processor 'citar)
   (org-cite-activate-processor 'citar)
   :config
+  (defvar citar-venue-abbreviations
+    '(("ePrint" . "ePrint")
+      ("Communications in Cryptology" . "CiC")
+      ("S\\\\?&P Workshops" . "S&P-W")
+      ("Symposium on Security and Privacy" . "S&P")
+      ("USENIX Security" . "USENIX Sec")
+      ("Network and Distributed System Security" . "NDSS")
+      ("Asia Conference on Computer and Communications Security" . "AsiaCCS")
+      ("Computer .*[Cc]ommunications [Ss]ecurity" . "CCS")
+      ("DSN-W" . "DSN-W")
+      ("Information Technology" . "it")
+      ("European Conference on Computer Systems" . "EuroSys")
+      ("Proceedings of the ACM on Programming Languages" . "PACMPL")
+      ("Programming Language Design and Implementation" . "PLDI")
+      ("Architectural Support for Programming Languages" . "ASPLOS")
+      ("Symposium on Microarchitecture" . "MICRO")
+      ("Design Automation Conference" . "DAC")
+      ("Symposium on Operating Systems Principles" . "SOSP")
+      ("Operating Systems Design and Implementation" . "OSDI")
+      ("Computer Security Foundations" . "CSF")
+      ("Computer Aided Design" . "ICCAD")
+      ("Computer Aided Verification" . "CAV")
+      ("Automated Software Engineering" . "ASE")
+      ("Certified Programs and Proofs" . "CPP")
+      ("Knowledge Discovery" . "KDD")
+      ("Symposium on Cloud Computing" . "SoCC")
+      ("Computer Security Applications" . "ACSAC")
+      ("Logic in Computer Science" . "LICS")
+      ("ESORICS" . "ESORICS")
+      ("Financial Cryptography" . "FC")
+      ("Ottawa Linux Symposium" . "OLS")
+      ("Web and Internet Economics" . "WINE")
+      ("Transactions on Dependable and Secure Computing" . "TDSC")
+      ("Transactions on Architecture and Code Optimization" . "TACO")
+      ("Transactions on Audio and Electroacoustics" . "TAE")
+      ("Communications of the ACM" . "CACM")
+      ("SIGPLAN Notices" . "SIGPLAN Not")
+      ("SIGOPS Operating Systems Review" . "OSR")
+      ("Journal of Cryptographic Engineering" . "JCEN")
+      ("Journal of Computer Security" . "JCS")
+      ("Journal of Automated Reasoning" . "JAR")
+      ("Journal of Algorithms" . "J Algorithms")
+      ("Journal of the Institution of Electrical Engineers" . "JIEE")
+      ("Science of Computer Programming" . "SCP")
+      ("Computers \\\\?& Security" . "COSE")
+      ("Concurso de Teses e Disserta" . "CTD"))
+    "Alist of (REGEXP . SHORT) pairs that `citar-venue-abbreviation' tries in order.")
+  (defun citar-venue-abbreviation (venue)
+    "Return the short name of VENUE from `citar-venue-abbreviations', or VENUE itself."
+    (when venue
+      (let ((case-fold-search nil)
+            (plain (replace-regexp-in-string "[{}\\\\]" "" venue)))
+        (or (cdr (seq-find (lambda (pair) (string-match-p (car pair) plain))
+                           citar-venue-abbreviations))
+            plain))))
   (defun org-cite-closing-bracket-to-reference (&rest _)
     "Treat the closing bracket of a citation as part of its last reference."
     (when (and (eq (char-after) ?\])
