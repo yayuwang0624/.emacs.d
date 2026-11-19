@@ -180,6 +180,7 @@ Signal an error if the entire string was not used."
     '("f R" . rename-visited-file)
     '("f f" . find-file)
     '("f y" . copy-buffer-path)
+    '("f Y" . copy-buffer-project-path)
     '("f b" . open-file-in-browser)
     '("f D" . delete-buffer-file)
     '("f U" . root-open-buffer-file)
@@ -223,39 +224,45 @@ Signal an error if the entire string was not used."
 
 (setq frame-resize-pixelwise t)
 
-(save-place-mode t)
-
-(setq recentf-max-saved-items nil
-      recentf-auto-cleanup 'never)
-
-(recentf-mode t)
-
 (setq confirm-kill-emacs 'y-or-n-p)
 
-(defun recentf-merge-before-save (orig-fun &rest args)
-  (let ((current recentf-list))
-    (ignore-errors (recentf-load-list))
-    (setq recentf-list (delete-dups (append current recentf-list))))
-  (apply orig-fun args))
+(use-package recentf
+  :ensure nil
+  :config
+  (setq recentf-max-saved-items nil
+        recentf-auto-cleanup 'never)
 
-(advice-add 'recentf-save-list :around #'recentf-merge-before-save)
+  (recentf-mode t)
 
-(run-at-time (* 5 60) (* 5 60)
-             (lambda () (let ((inhibit-message t)
-                              (save-silently t))
-                          (recentf-save-list))))
+  (defun recentf-merge-before-save (orig-fun &rest args)
+    (let ((current recentf-list))
+      (ignore-errors (recentf-load-list))
+      (setq recentf-list (delete-dups (append current recentf-list))))
+    (apply orig-fun args))
 
-(if (boundp 'save-place-autosave-interval)
-    (customize-set-variable 'save-place-autosave-interval (* 5 60))
+  (advice-add 'recentf-save-list :around #'recentf-merge-before-save)
+
   (run-at-time (* 5 60) (* 5 60)
-               (lambda ()
-                 (when save-place-mode
-                   (let ((inhibit-message t)
-                         (save-silently t))
-                     (dolist (buf (buffer-list))
-                       (with-current-buffer buf
-                         (ignore-errors (save-place-to-alist))))
-                     (save-place-alist-to-file))))))
+               (lambda () (let ((inhibit-message t)
+                                (save-silently t))
+                            (recentf-save-list)))))
+
+(use-package saveplace
+  :ensure nil
+  :config
+  (save-place-mode t)
+
+  (if (boundp 'save-place-autosave-interval)
+      (customize-set-variable 'save-place-autosave-interval (* 5 60))
+    (run-at-time (* 5 60) (* 5 60)
+                 (lambda ()
+                   (when save-place-mode
+                     (let ((inhibit-message t)
+                           (save-silently t))
+                       (dolist (buf (buffer-list))
+                         (with-current-buffer buf
+                           (ignore-errors (save-place-to-alist))))
+                       (save-place-alist-to-file)))))))
 
 (setq-default indent-tabs-mode nil)
 
@@ -284,6 +291,8 @@ Signal an error if the entire string was not used."
                  (or (dired-get-filename nil t) (dired-current-directory)))
                 ((derived-mode-p 'magit-mode)
                  (or (magit-toplevel) default-directory))
+                ((derived-mode-p 'eaf-mode)
+                 (bound-and-true-p eaf--buffer-url))
                 ((bound-and-true-p magit-buffer-file-name))
                 ((buffer-file-name (buffer-base-buffer)))))
          (path (if file (expand-file-name file) (buffer-name))))
@@ -291,13 +300,33 @@ Signal an error if the entire string was not used."
     (message "%s" path)
     path))
 
+(defun copy-buffer-project-path ()
+  "Copy the visited file as PATH:LINE, relative to the project root.
+Fall back to `copy-buffer-path' when the buffer visits no file or
+the file is outside any project."
+  (interactive)
+  (let* ((file (or (bound-and-true-p magit-buffer-file-name)
+                   (buffer-file-name (buffer-base-buffer))))
+         (project (and file (project-current nil (file-name-directory file))))
+         (root (and project (project-root project))))
+    (if (not root)
+        (copy-buffer-path)
+      (let ((path (format "%s:%d"
+                          (file-relative-name (expand-file-name file)
+                                              (expand-file-name root))
+                          (line-number-at-pos nil t))))
+        (kill-new path)
+        (message "%s" path)
+        path))))
+
 (defun open-file-in-browser ()
   "Open the visited file, or the file at point in Dired, in Zen.
 Use the default browser when Zen is not installed."
   (interactive)
-  (let ((file (if (derived-mode-p 'dired-mode)
-                  (dired-get-filename nil t)
-                (buffer-file-name (buffer-base-buffer))))
+  (let ((file (cond
+               ((derived-mode-p 'dired-mode) (dired-get-filename nil t))
+               ((derived-mode-p 'eaf-mode) (bound-and-true-p eaf--buffer-url))
+               (t (buffer-file-name (buffer-base-buffer)))))
         (zen (executable-find "zen-browser")))
     (unless file
       (user-error "This buffer visits no file"))
@@ -395,32 +424,36 @@ Use the default browser when Zen is not installed."
 
 (setq isearch-lazy-count t)
 (setq-default case-fold-search t)
-(setq display-line-numbers-type t)
 
-(defcustom line-number-large-file-threshold 5000
-  "Lines threshold above which line numbers are disabled."
-  :type 'integer)
+(use-package display-line-numbers
+  :ensure nil
+  :config
+  (setq display-line-numbers-type t)
 
-(defun line-number-too-large-p ()
-  (> (buffer-size) (* line-number-large-file-threshold 80)))
+  (defcustom line-number-large-file-threshold 5000
+    "Lines threshold above which line numbers are disabled."
+    :type 'integer)
 
-(defun setup-line-numbers ()
-  "Enable relative line numbers, skip large files."
-  (if (line-number-too-large-p)
-      (display-line-numbers-mode -1)
-    (display-line-numbers-mode 1)))
+  (defun line-number-too-large-p ()
+    (> (buffer-size) (* line-number-large-file-threshold 80)))
 
-(add-hook 'prog-mode-hook #'setup-line-numbers)
-(add-hook 'text-mode-hook #'setup-line-numbers)
+  (defun setup-line-numbers ()
+    "Enable relative line numbers, skip large files."
+    (if (line-number-too-large-p)
+        (display-line-numbers-mode -1)
+      (display-line-numbers-mode 1)))
 
-(dolist (mode '(term-mode-hook
-                vterm-mode-hook
-                dired-mode-hook
-                treemacs-mode-hook
-                dashboard-mode-hook
-                so-long-mode-hook
-                pdf-view-mode-hook))
-  (add-hook mode (lambda () (display-line-numbers-mode -1))))
+  (add-hook 'prog-mode-hook #'setup-line-numbers)
+  (add-hook 'text-mode-hook #'setup-line-numbers)
+
+  (dolist (mode '(term-mode-hook
+                  vterm-mode-hook
+                  dired-mode-hook
+                  treemacs-mode-hook
+                  dashboard-mode-hook
+                  so-long-mode-hook
+                  pdf-view-mode-hook))
+    (add-hook mode (lambda () (display-line-numbers-mode -1)))))
 #+end_src
 
 ** theme
@@ -595,8 +628,55 @@ kill the daemon."
   :config
   (setq-default visual-fill-column-width 100)
   (setq-default visual-fill-column-center-text t)
+
+  (defun vertical-motion-landing-point (orig line-start lines window)
+    "Return where ORIG lands after moving LINES screen lines from LINE-START."
+    (goto-char line-start)
+    (funcall orig lines window)
+    (point))
+
+  (defun vertical-motion-screen-line-of (orig line-start target window)
+    "Return the screen line of TARGET, counted from LINE-START by ORIG."
+    (let ((low 0)
+          (low-pos line-start)
+          (high 1))
+      (while (let ((pos (vertical-motion-landing-point orig line-start high window)))
+               (when (and (<= pos target) (> pos low-pos))
+                 (setq low high low-pos pos high (* 2 high)))))
+      (while (> (- high low) 1)
+        (let* ((mid (/ (+ low high) 2))
+               (pos (vertical-motion-landing-point orig line-start mid window)))
+          (if (and (<= pos target) (> pos low-pos))
+              (setq low mid low-pos pos)
+            (setq high mid))))
+      low))
+
+  (defun vertical-motion-from-line-start (orig lines &optional window cur-col)
+    "Run ORIG `vertical-motion' counting screen lines from a line start.
+  Emacs miscounts screen lines when a window has margins and the motion
+  starts deep inside a long wrapped line.  Counting from the start of the
+  logical line gives the same layout redisplay shows."
+    (let ((margins (window-margins window)))
+      (if (or truncate-lines
+              (not (or (car margins) (cdr margins))))
+          (funcall orig lines window cur-col)
+        (let* ((count (if (consp lines) (cdr lines) lines))
+               (column (and (consp lines) (car lines)))
+               (line-start (line-beginning-position))
+               (base (vertical-motion-screen-line-of orig line-start (point) window)))
+          (while (and (< (+ base count) 0) (> line-start (point-min)))
+            (let ((previous-end (1- line-start)))
+              (setq line-start (save-excursion (goto-char previous-end) (line-beginning-position)))
+              (setq base (+ base 1 (vertical-motion-screen-line-of orig line-start previous-end window)))))
+          (let ((wanted (max 0 (+ base count))))
+            (goto-char line-start)
+            (- (funcall orig (if column (cons column wanted) wanted) window) base))))))
+
+  (advice-add 'vertical-motion :around #'vertical-motion-from-line-start)
+
   (miao-leader-define-keys
    '("l L" . visual-fill-column-mode)))
+
 #+end_src
 
 ** which-key
@@ -760,17 +840,22 @@ kill the daemon."
       '("w t" . transpose-frame)
       '("w =" . balance-windows)))
 
-(defun focus-new-window (new-window)
-  (when (and (window-live-p new-window)
-             (memq this-command '(split-window-below split-window-right)))
-    (select-window new-window))
-  new-window)
+(use-package window
+  :ensure nil
+  :config
+  (defun focus-new-window (new-window)
+    (when (and (window-live-p new-window)
+               (memq this-command '(split-window-below split-window-right)))
+      (select-window new-window))
+    new-window)
 
-(advice-add 'split-window-below :filter-return #'focus-new-window)
-(advice-add 'split-window-right :filter-return #'focus-new-window)
+  (advice-add 'split-window-below :filter-return #'focus-new-window)
+  (advice-add 'split-window-right :filter-return #'focus-new-window)
 
-(bind-keys ("C-<tab>" . other-window)
-           ("C-<iso-lefttab>" . (lambda () (interactive) (other-window -1))))
+  (bind-keys ("C-<tab>" . other-window)
+             ("C-<iso-lefttab>" . (lambda () (interactive) (other-window -1)))))
+
+
 #+end_src
 
 ** winum
@@ -997,7 +1082,12 @@ kill the daemon."
     (:install "pacman -S texlive-binextra")
     (:languages "LaTeX")
     (:features)
-    (:format (format-all--buffer-easy executable "-m" "-g" "/dev/null")))
+    (:format
+     (let ((root (locate-dominating-file default-directory "latexindent.yaml")))
+       (apply #'format-all--buffer-easy executable "-m" "-g" "/dev/null"
+              (append (when root
+                        (list (concat "-l=" (expand-file-name "latexindent.yaml" root))))
+                      '("-"))))))
 
   (defun format-all-set-tex-formatter ()
     (setq format-all-formatters `(("LaTeX" (latexindent)))))
@@ -1060,21 +1150,25 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 
 ** compile
 #+begin_src emacs-lisp
-(defun colorize-compilation-buffer ()
- (read-only-mode)
- (ansi-color-apply-on-region compilation-filter-start (point))
- (read-only-mode))
-(add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
+(use-package compile
+  :ensure nil
+  :defer t
+  :config
+  (defun colorize-compilation-buffer ()
+    (read-only-mode)
+    (ansi-color-apply-on-region compilation-filter-start (point))
+   (read-only-mode))
+  (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
 
-(defun compilation-close-window-on-success (buffer status)
-  "Close the window of compilation BUFFER one second after STATUS reports success."
-  (when (and (eq (buffer-local-value 'major-mode buffer) 'compilation-mode)
-             (string-prefix-p "finished" status))
-    (run-at-time 1 nil
-                 (lambda ()
-                   (dolist (window (get-buffer-window-list buffer nil t))
-                     (quit-window nil window))))))
-(add-hook 'compilation-finish-functions #'compilation-close-window-on-success)
+  (defun compilation-close-window-on-success (buffer status)
+    "Close the window of compilation BUFFER one second after STATUS reports success."
+    (when (and (eq (buffer-local-value 'major-mode buffer) 'compilation-mode)
+               (string-prefix-p "finished" status))
+      (run-at-time 1 nil
+                   (lambda ()
+                     (dolist (window (get-buffer-window-list buffer nil t))
+                       (quit-window nil window))))))
+  (add-hook 'compilation-finish-functions #'compilation-close-window-on-success))
 #+end_src
 ** checking
 #+begin_src emacs-lisp
@@ -1291,10 +1385,10 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 
 ** proof-general
 #+begin_src emacs-lisp
-(setq switch-to-buffer-in-dedicated-window 'pop)
-
 (use-package proof-general
   :ensure t
+  :init
+  (setq switch-to-buffer-in-dedicated-window 'pop)
   :custom
   (coq-show-proof-stepwise t)
   (proof-three-window-mode-policy 'hybrid))
@@ -1388,6 +1482,34 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
 #+begin_src emacs-lisp
 (use-package go-mode
   :ensure t)
+#+end_src
+
+** WebAssembly
+#+begin_src emacs-lisp
+(use-package wat-ts-mode
+  :ensure t
+  :mode (("\\.wat\\'" . wat-ts-mode)
+         ("\\.wast\\'" . wat-ts-wast-mode))
+  :init
+  (dolist (lang '(wat wast))
+    (add-to-list 'treesit-language-source-alist
+                 `(,lang "https://github.com/wasm-lsp/tree-sitter-wasm" nil ,(format "%s/src" lang))))
+  (defun wasm-binary-view ()
+    "Show the binary .wasm file of this buffer as read-only WAT text from wasm2wat."
+    (let ((inhibit-read-only t)
+          (wasm-file buffer-file-name))
+      (erase-buffer)
+      (set-buffer-multibyte t)
+      (unless (zerop (call-process "wasm2wat" nil t nil "--no-check" wasm-file))
+        (goto-char (point-min))
+        (insert (format "wasm2wat failed on %s\n\n" wasm-file)))
+      (goto-char (point-min))
+      (set-buffer-modified-p nil))
+    (if (treesit-language-available-p 'wat)
+        (wat-ts-mode)
+      (fundamental-mode))
+    (read-only-mode 1))
+  (add-to-list 'auto-mode-alist '("\\.wasm\\'" . wasm-binary-view)))
 #+end_src
 
 ** agda
@@ -1560,14 +1682,6 @@ The indent flag is added from `indent-tabs-mode' and `bibtex-field-indentation'.
                 (when (and (boundp v) (> (length (symbol-value v)) 300))
                   (set v (take 300 (symbol-value v)))))))
   (savehist-mode))
-
-(defun project-find-file-history-from-recentf (orig-fun &rest args)
-  (let ((file-name-history (if (bound-and-true-p recentf-mode)
-                               recentf-list
-                             file-name-history)))
-    (apply orig-fun args)))
-
-(advice-add 'project-find-file-in :around #'project-find-file-history-from-recentf)
 #+end_src
 
 ** orderless
@@ -2150,36 +2264,7 @@ two concept names that disagree."
     (interactive)
     (consult-ripgrep default-directory))
 
-  (defun bookmark-project-names ()
-    "Names of bookmarks whose file is under the current project root."
-    (bookmark-maybe-load-default-file)
-    (let ((root (expand-file-name (project-root (project-current t)))))
-      (seq-keep (lambda (bm)
-                  (when-let* ((file (bookmark-get-filename bm)))
-                    (and (string-prefix-p root (expand-file-name file)) (car bm))))
-                bookmark-alist)))
-
-  (defun consult-project-bookmark ()
-    "Jump to a bookmark inside the current project."
-    (interactive)
-    (consult--multi `(( :name "Project Bookmark"
-                        :category bookmark
-                        :face consult-bookmark
-                        :history bookmark-history
-                        :items ,#'bookmark-project-names
-                        :state ,#'consult--bookmark-state))
-                    :sort nil))
-
-  (defun bookmark-set-in-project ()
-    "Set a bookmark named after the project and the buffer."
-    (interactive)
-    (bookmark-set (read-string "Bookmark name: "
-                               (format "%s: %s" (project-name (project-current t))
-                                       (bookmark-buffer-name)))))
-
   (miao-define-keys 'leader
-    '("b m" . consult-project-bookmark)
-    '("b M" . bookmark-set-in-project)
     '("s s" . consult-line)
     '("s S" . consult-line-at-point)
     '("s i" . consult-imenu)
@@ -2190,6 +2275,133 @@ two concept names that disagree."
     '("u SPC" . consult-mark)
     '("p b" . consult-project-buffer)
     '("s SPC" . consult-global-mark)))
+#+end_src
+
+** project bookmarks
+#+begin_src emacs-lisp
+(use-package bookmark
+  :ensure nil
+  :after (consult project)
+  :custom
+  (bookmark-save-flag 1)
+  :config
+  (defun project-bookmark-root ()
+    "Root of the current project as an absolute directory name, or nil.
+Outside a project buffer, fall back to the perspective's `project-root'."
+    (when-let* ((root (or (when-let* ((project (project-current)))
+                            (project-root project))
+                          (and (bound-and-true-p persp-mode)
+                               (persp-parameter 'project-root (get-current-persp))))))
+      (file-name-as-directory (expand-file-name root))))
+
+  (defun project-bookmark-require-root ()
+    "Return `project-bookmark-root' or signal a user error."
+    (or (project-bookmark-root) (user-error "Not in a project")))
+
+  (defun project-bookmark-in-root-p (bookmark root)
+    "Non-nil if BOOKMARK belongs to the project at ROOT.
+A bookmark set by `project-bookmark-set' records its project root.
+Any other bookmark belongs to the project that contains its file."
+    (if-let* ((owner (bookmark-prop-get bookmark 'project-root)))
+        (equal owner root)
+      (when-let* ((file (bookmark-get-filename bookmark)))
+        (string-prefix-p root (expand-file-name file)))))
+
+  (defun project-bookmark-names ()
+    "Names of the bookmarks that belong to the current project."
+    (bookmark-maybe-load-default-file)
+    (when-let* ((root (project-bookmark-root)))
+      (seq-keep (lambda (bookmark)
+                  (and (project-bookmark-in-root-p bookmark root) (car bookmark)))
+                bookmark-alist)))
+
+  (defun project-bookmark-read (prompt)
+    "Read the name of a bookmark of the current project with PROMPT."
+    (project-bookmark-require-root)
+    (let ((names (or (project-bookmark-names)
+                     (user-error "No bookmarks in this project"))))
+      (completing-read prompt
+                       (completion-table-with-metadata names '((category . bookmark)))
+                       nil t nil 'bookmark-history)))
+
+  (defun project-bookmark-default-name (root)
+    "Suggested bookmark name at point, prefixed by the name of project ROOT."
+    (format "%s: %s:%d"
+            (file-name-nondirectory (directory-file-name root))
+            (bookmark-buffer-name)
+            (line-number-at-pos)))
+
+  (defun project-bookmark-set (name)
+    "Set bookmark NAME at point and record the current project as its owner."
+    (interactive
+     (list (read-string "Project bookmark: "
+                        (project-bookmark-default-name (project-bookmark-require-root))
+                        'bookmark-history)))
+    (let ((root (project-bookmark-require-root)))
+      (bookmark-set name)
+      (bookmark-prop-set name 'project-root root)
+      (bookmark-save)
+      (message "Bookmark %s set in %s" name root)))
+
+  (defvar consult-source-project-bookmark
+    `( :name     "Project Bookmark"
+       :narrow   ?m
+       :category bookmark
+       :face     consult-bookmark
+       :history  bookmark-history
+       :enabled  ,#'project-bookmark-root
+       :items    ,#'project-bookmark-names
+       :state    ,#'consult--bookmark-state)
+    "Bookmarks of the current project, as a `consult--multi' source.")
+
+  (add-to-list 'consult-project-buffer-sources 'consult-source-project-bookmark t)
+
+  (defun project-bookmark-jump ()
+    "Jump to a bookmark of the current project, with preview."
+    (interactive)
+    (project-bookmark-require-root)
+    (consult--multi '(consult-source-project-bookmark)
+                    :prompt "Project bookmark: "
+                    :require-match t
+                    :sort nil))
+
+  (defun project-bookmark-delete (name)
+    "Delete bookmark NAME of the current project."
+    (interactive (list (project-bookmark-read "Delete project bookmark: ")))
+    (bookmark-delete name)
+    (bookmark-save))
+
+  (defun project-bookmark-rename (old new)
+    "Rename bookmark OLD of the current project to NEW."
+    (interactive
+     (let ((old (project-bookmark-read "Rename project bookmark: ")))
+       (list old (read-string (format "Rename %s to: " old) old))))
+    (bookmark-rename old new)
+    (bookmark-save))
+
+  (defun project-bookmark-prune ()
+    "Delete the bookmarks of the current project whose local file is gone."
+    (interactive)
+    (let ((dead (seq-filter
+                 (lambda (name)
+                   (when-let* ((file (bookmark-get-filename name)))
+                     (and (not (file-remote-p file))
+                          (not (file-exists-p file)))))
+                 (progn (project-bookmark-require-root) (project-bookmark-names)))))
+      (cond
+       ((null dead) (message "No dead bookmarks in this project"))
+       ((y-or-n-p (format "Delete %d dead bookmarks (%s)? "
+                          (length dead) (string-join dead ", ")))
+        (dolist (name dead)
+          (bookmark-delete name t))
+        (bookmark-save)))))
+
+  (miao-define-keys 'leader
+    '("b m" . project-bookmark-jump)
+    '("b M" . project-bookmark-set)
+    '("b a" . consult-bookmark)
+    '("b d" . project-bookmark-delete)
+    '("b R" . project-bookmark-rename)))
 #+end_src
 
 ** marginalia
@@ -2336,122 +2548,131 @@ two concept names that disagree."
 
 ** org-agenda
 #+begin_src emacs-lisp
-(defun open-org-persp ()
-  "Switch to the perspective that owns `org-directory', creating it if needed."
-  (when (bound-and-true-p persp-mode)
-    (let* ((root (file-truename (directory-file-name org-directory)))
-           (name (persp-name-for-project root)))
-      (persp-switch name)
-      (let ((p (persp-get-by-name name)))
-        (when (perspective-p p)
-          (set-persp-parameter 'project-root root p))))))
+(use-package org-agenda
+  :ensure nil
+  :defer t
+  :init
+  (defun open-org-persp ()
+    "Switch to the perspective that owns `org-directory', creating it if needed."
+    (when (bound-and-true-p persp-mode)
+      (let* ((root (file-truename (directory-file-name org-directory)))
+             (name (persp-name-for-project root)))
+        (persp-switch name)
+        (let ((p (persp-get-by-name name)))
+          (when (perspective-p p)
+            (set-persp-parameter 'project-root root p))))))
 
-(defun open-org-todo-files ()
-  (interactive)
-  (open-org-persp)
-  (find-file org-directory)
-  (project-find-file))
+  (defun open-org-todo-files ()
+    (interactive)
+    (open-org-persp)
+    (find-file org-directory)
+    (project-find-file))
 
-(defun open-org-todo-file ()
-  (interactive)
-  (open-org-persp)
-  (find-file org-todo-file)
-  (delete-other-windows))
+  (defun open-org-todo-file ()
+    (interactive)
+    (open-org-persp)
+    (find-file org-todo-file)
+    (delete-other-windows))
 
-(defun open-org-agenda ()
-  "Switch to the org perspective, then open the agenda dispatcher."
-  (interactive)
-  (open-org-persp)
-  (call-interactively #'org-agenda))
+  (defun open-org-agenda ()
+    "Switch to the org perspective, then open the agenda dispatcher."
+    (interactive)
+    (open-org-persp)
+    (call-interactively #'org-agenda))
 
-(defun open-org-today ()
-  "Open the dashboard: next 7 days, in-progress work, waiting items, todos by project."
-  (interactive)
-  (open-org-persp)
-  (org-agenda nil "d"))
+  (defun open-org-today ()
+    "Open the dashboard: next 7 days, in-progress work, waiting items, todos by project."
+    (interactive)
+    (open-org-persp)
+    (org-agenda nil "d"))
 
-(set-face-attribute 'org-agenda-current-time nil :bold t :foreground "#EEEEEE")
-(setq org-agenda-window-setup 'current-window
-      org-agenda-restore-windows-after-quit t
-      org-agenda-span 'week
-      org-agenda-start-on-weekday nil
-      org-agenda-skip-scheduled-if-done t
-      org-agenda-skip-deadline-if-done t
-      org-agenda-skip-timestamp-if-done t
-      org-agenda-skip-deadline-prewarning-if-scheduled t
-      org-agenda-skip-scheduled-if-deadline-is-shown t
-      org-deadline-warning-days 7
-      org-agenda-todo-ignore-scheduled 'future
-      org-agenda-tags-todo-honor-ignore-options t
-      org-agenda-tags-column 0
-      org-agenda-block-separator ?─
-      org-agenda-time-grid
-      '((daily today require-timed)
-        (800 1000 1200 1400 1600 1800 2000)
-        " " "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-      org-agenda-current-time-string
-      "now ──────────────────────────────────────────────")
+  (miao-leader-define-keys
+    '("o a" . open-org-agenda)
+    '("o d" . open-org-today)
+    '("o t" . open-org-todo-file)
+    '("o f" . open-org-todo-files))
+  :config
+  (set-face-attribute 'org-agenda-current-time nil :bold t :foreground "#EEEEEE")
+  (setq org-agenda-window-setup 'current-window
+        org-agenda-restore-windows-after-quit t
+        org-agenda-span 'week
+        org-agenda-start-on-weekday nil
+        org-agenda-skip-scheduled-if-done t
+        org-agenda-skip-deadline-if-done t
+        org-agenda-skip-timestamp-if-done t
+        org-agenda-skip-deadline-prewarning-if-scheduled t
+        org-agenda-skip-scheduled-if-deadline-is-shown t
+        org-deadline-warning-days 7
+        org-agenda-todo-ignore-scheduled 'future
+        org-agenda-tags-todo-honor-ignore-options t
+        org-agenda-tags-column 0
+        org-agenda-block-separator ?─
+        org-agenda-time-grid
+        '((daily today require-timed)
+          (800 1000 1200 1400 1600 1800 2000)
+          " " "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
+        org-agenda-current-time-string
+        "now ──────────────────────────────────────────────")
 
-(setq org-agenda-clockreport-parameter-plist '(:link t :maxlevel 4 :fileskip0 t :compact t)
-      org-agenda-clock-report-header "\nClocked time\n")
+  (setq org-agenda-clockreport-parameter-plist '(:link t :maxlevel 4 :fileskip0 t :compact t)
+        org-agenda-clock-report-header "\nClocked time\n")
 
-(defun org-agenda-format-date-spaced (date)
-  "Format DATE like `org-agenda-format-date-aligned' with a blank line above it."
-  (concat "\n" (org-agenda-format-date-aligned date)))
+  (defun org-agenda-format-date-spaced (date)
+    "Format DATE like `org-agenda-format-date-aligned' with a blank line above it."
+    (concat "\n" (org-agenda-format-date-aligned date)))
 
-(setq org-agenda-format-date #'org-agenda-format-date-spaced
-      org-agenda-prefix-format '((agenda . "  %i %?-12t% s")
-                                 (todo . "  %i ")
-                                 (tags . "  %i ")
-                                 (search . "  %i "))
-      org-agenda-scheduled-leaders '("" "Sched. %dx ")
-      org-agenda-deadline-leaders '("Due " "In %d d. " "%d d. ago ")
-      org-agenda-todo-keyword-format "%s"
-      org-agenda-time-leading-zero t
-      org-agenda-category-icon-alist
-      `(("Calendar" ,(list (nerd-icons-mdicon "nf-md-calendar")) nil nil :ascent center)
-        ("todo" ,(list (nerd-icons-mdicon "nf-md-checkbox_blank_outline")) nil nil :ascent center)
-        ("notes" ,(list (nerd-icons-mdicon "nf-md-notebook_outline")) nil nil :ascent center)
-        (".*" ,(list (nerd-icons-mdicon "nf-md-circle_small")) nil nil :ascent center)))
+  (setq org-agenda-format-date #'org-agenda-format-date-spaced
+        org-agenda-prefix-format '((agenda . "  %i %?-12t% s")
+                                   (todo . "  %i ")
+                                   (tags . "  %i ")
+                                   (search . "  %i "))
+        org-agenda-scheduled-leaders '("" "Sched. %dx ")
+        org-agenda-deadline-leaders '("Due " "In %d d. " "%d d. ago ")
+        org-agenda-todo-keyword-format "%s"
+        org-agenda-time-leading-zero t
+        org-agenda-category-icon-alist
+        `(("Calendar" ,(list (nerd-icons-mdicon "nf-md-calendar")) nil nil :ascent center)
+          ("todo" ,(list (nerd-icons-mdicon "nf-md-checkbox_blank_outline")) nil nil :ascent center)
+          ("notes" ,(list (nerd-icons-mdicon "nf-md-notebook_outline")) nil nil :ascent center)
+          (".*" ,(list (nerd-icons-mdicon "nf-md-circle_small")) nil nil :ascent center)))
 
-(with-eval-after-load 'org-agenda
   (set-face-attribute 'org-agenda-structure nil :height 1.2 :weight 'bold)
   (set-face-attribute 'org-agenda-date nil :height 1.1)
   (set-face-attribute 'org-agenda-date-today nil :height 1.1 :weight 'bold :slant 'normal)
-  (set-face-attribute 'org-agenda-date-weekend nil :height 1.1))
+  (set-face-attribute 'org-agenda-date-weekend nil :height 1.1)
 
-(setq org-agenda-custom-commands
-      `(("d" "Dashboard"
-         ((agenda "" ((org-agenda-span 7)
-                      (org-agenda-start-day nil)
-                      (org-super-agenda-groups
-                       '((:name "Overdue" :scheduled past :deadline past :order 2)
-                         (:name none :time-grid t :anything t :order 1)))))
-          (todo "PROG" ((org-agenda-overriding-header "In progress")))
-          (todo "WAIT" ((org-agenda-overriding-header "Waiting for")))
-          (todo "TODO|FIXME|REVIEW"
-                ((org-agenda-files (list org-todo-file))
-                 (org-agenda-overriding-header "Next actions by project")
-                 (org-super-agenda-groups '((:auto-outline-path t)))))))
-        ("w" "Week" agenda "" ((org-agenda-span 'week)))
-        ("c" "Clocked time this week" agenda ""
-         ((org-agenda-span 'week)
-          (org-agenda-start-on-weekday 1)
-          (org-agenda-start-with-clockreport-mode t)
-          (org-agenda-show-log 'clockcheck)))
-        ("C" "Clocked time this month" agenda ""
-         ((org-agenda-span 'month)
-          (org-agenda-start-with-clockreport-mode t)))
-        ("p" "Projects" todo "TODO|PROG|WAIT|HOLD|FIXME|REVIEW"
-         ((org-agenda-files (list org-todo-file))
-          (org-super-agenda-groups '((:auto-outline-path t)))))
-        ("r" "Weekly review"
-         ((agenda "" ((org-agenda-span 8)
-                      (org-agenda-start-day "-7d")
-                      (org-agenda-show-log t)
-                      (org-agenda-log-mode-items '(closed clock))
-                      (org-agenda-overriding-header "Last week")))
-          (todo "WAIT|HOLD" ((org-agenda-overriding-header "Waiting and on hold")))))))
+  (setq org-agenda-custom-commands
+        `(("d" "Dashboard"
+           ((agenda "" ((org-agenda-span 7)
+                        (org-agenda-start-day nil)
+                        (org-super-agenda-groups
+                         '((:name "Overdue" :scheduled past :deadline past :order 2)
+                           (:name none :time-grid t :anything t :order 1)))))
+            (todo "PROG" ((org-agenda-overriding-header "In progress")))
+            (todo "WAIT" ((org-agenda-overriding-header "Waiting for")))
+            (todo "TODO|FIXME|REVIEW"
+                  ((org-agenda-files (list org-todo-file))
+                   (org-agenda-overriding-header "Next actions by project")
+                   (org-super-agenda-groups '((:auto-outline-path t)))))))
+          ("w" "Week" agenda "" ((org-agenda-span 'week)))
+          ("c" "Clocked time this week" agenda ""
+           ((org-agenda-span 'week)
+            (org-agenda-start-on-weekday 1)
+            (org-agenda-start-with-clockreport-mode t)
+            (org-agenda-show-log 'clockcheck)))
+          ("C" "Clocked time this month" agenda ""
+           ((org-agenda-span 'month)
+            (org-agenda-start-with-clockreport-mode t)))
+          ("p" "Projects" todo "TODO|PROG|WAIT|HOLD|FIXME|REVIEW"
+           ((org-agenda-files (list org-todo-file))
+            (org-super-agenda-groups '((:auto-outline-path t)))))
+          ("r" "Weekly review"
+           ((agenda "" ((org-agenda-span 8)
+                        (org-agenda-start-day "-7d")
+                        (org-agenda-show-log t)
+                        (org-agenda-log-mode-items '(closed clock))
+                        (org-agenda-overriding-header "Last week")))
+            (todo "WAIT|HOLD" ((org-agenda-overriding-header "Waiting and on hold"))))))))
 
 (use-package org-super-agenda
   :ensure t
@@ -2459,12 +2680,6 @@ two concept names that disagree."
   :config
   (setq org-super-agenda-header-map (make-sparse-keymap))
   (org-super-agenda-mode 1))
-
-(miao-leader-define-keys
-  '("o a" . open-org-agenda)
-  '("o d" . open-org-today)
-  '("o t" . open-org-todo-file)
-  '("o f" . open-org-todo-files))
 #+end_src
 
 ** org-modern
@@ -2480,31 +2695,31 @@ two concept names that disagree."
         org-modern-list '((?+ . "▸")
                           (?- . "–")
                           (?* . "▸")))
-  (global-org-modern-mode))
+  (global-org-modern-mode)
 
-(defconst org-lowercase-checkbox-re
-  "^[ \t]*\\(?:[-+*]\\|\\(?:[0-9]+\\|[A-Za-z]\\)[.)]\\)[ \t]+\\(?:\\[@[^]\n]+\\][ \t]*\\)?\\[\\(x\\)\\]")
+  (defconst org-lowercase-checkbox-re
+    "^[ \t]*\\(?:[-+*]\\|\\(?:[0-9]+\\|[A-Za-z]\\)[.)]\\)[ \t]+\\(?:\\[@[^]\n]+\\][ \t]*\\)?\\[\\(x\\)\\]")
 
-(defun org-upcase-checkbox-at-line ()
-  (when (memq last-command-event '(?x ?\]))
+  (defun org-upcase-checkbox-at-line ()
+    (when (memq last-command-event '(?x ?\]))
+      (save-excursion
+        (beginning-of-line)
+        (let ((case-fold-search nil))
+          (when (looking-at org-lowercase-checkbox-re)
+            (replace-match "X" t t nil 1))))))
+
+  (defun org-upcase-checkboxes ()
     (save-excursion
-      (beginning-of-line)
+      (goto-char (point-min))
       (let ((case-fold-search nil))
-        (when (looking-at org-lowercase-checkbox-re)
-          (replace-match "X" t t nil 1))))))
+        (while (re-search-forward org-lowercase-checkbox-re nil t)
+          (replace-match "X" t t nil 1)))))
 
-(defun org-upcase-checkboxes ()
-  (save-excursion
-    (goto-char (point-min))
-    (let ((case-fold-search nil))
-      (while (re-search-forward org-lowercase-checkbox-re nil t)
-        (replace-match "X" t t nil 1)))))
+  (defun org-setup-lowercase-checkboxes ()
+    (add-hook 'post-self-insert-hook #'org-upcase-checkbox-at-line nil t)
+    (add-hook 'before-save-hook #'org-upcase-checkboxes nil t))
 
-(defun org-setup-lowercase-checkboxes ()
-  (add-hook 'post-self-insert-hook #'org-upcase-checkbox-at-line nil t)
-  (add-hook 'before-save-hook #'org-upcase-checkboxes nil t))
-
-(add-hook 'org-mode-hook #'org-setup-lowercase-checkboxes)
+  (add-hook 'org-mode-hook #'org-setup-lowercase-checkboxes))
 #+end_src
 
 ** org-appear
@@ -2776,6 +2991,14 @@ With a prefix ARG kill the active timer."
   :init
   (setq project-vc-merge-submodules nil)
   :config
+  (defun project-find-file-history-from-recentf (orig-fun &rest args)
+    (let ((file-name-history (if (bound-and-true-p recentf-mode)
+                                 recentf-list
+                               file-name-history)))
+      (apply orig-fun args)))
+
+  (advice-add 'project-find-file-in :around #'project-find-file-history-from-recentf)
+
   (defun project-open-magit ()
     (interactive)
     (magit (project-root (project-current t))))
@@ -3029,7 +3252,7 @@ variable `project-local-identifier' to be considered a project."
  (defun persp-move-right ()
    (interactive)
    (let ((pos (cl-position persp-last-persp-name persp-names-cache)))
-     (unless (= pos (length persp-names-cache))
+     (when (< (1+ pos) (length persp-names-cache))
        (cl-rotatef (nth (1+ pos) persp-names-cache) (nth pos persp-names-cache))))
    (persp-show-persps))
 
@@ -3104,6 +3327,12 @@ EAF activates the first X window of the Emacs PID, which can be a dialog."
   :custom
   (eaf-python-command (expand-file-name "site-lisp/eaf-venv/bin/python" user-emacs-directory))
   :config
+  (defun eaf-follow-theme-background (&rest _)
+    "Set `eaf-buffer-background-color' to the background of the default face."
+    (setq eaf-buffer-background-color (face-background 'default nil t)))
+  (eaf-follow-theme-background)
+  (add-hook 'enable-theme-functions #'eaf-follow-theme-background)
+
   (defun eaf-follow-selected-frame (&rest _)
     "Make the selected top-level frame `eaf-emacs-frame'.
 EAF updates its views only while the frame it started in is selected."
