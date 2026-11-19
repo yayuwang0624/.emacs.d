@@ -1,5 +1,5 @@
 diff --git a/eaf_pdf_buffer.py b/eaf_pdf_buffer.py
-index 7da8382..a89e45b 100755
+index 7da8382..89dfc86 100755
 --- a/eaf_pdf_buffer.py
 +++ b/eaf_pdf_buffer.py
 @@ -24,6 +24,7 @@ from PyQt6.QtCore import QTimer,  QObject
@@ -10,7 +10,15 @@ index 7da8382..a89e45b 100755
  import os
  import threading
  
-@@ -407,6 +408,19 @@ class AppBuffer(Buffer):
+@@ -294,7 +295,6 @@ class AppBuffer(Buffer):
+         self.buffer_widget.rotation = int(rotation)
+         self.buffer_widget.inverted_mode = inverted_mode == "True"
+         self.buffer_widget.start_page_index = int(start_page_index)
+-        self.buffer_widget.presentation_mode = read_mode == "fit_to_presentation"
+ 
+         if read_mode == "fit_to_presentation":
+             QTimer().singleShot(10, self.enable_fullscreen)
+@@ -407,6 +407,19 @@ class AppBuffer(Buffer):
      def current_percent(self):
          return str(self.buffer_widget.current_percent())
  
@@ -30,8 +38,21 @@ index 7da8382..a89e45b 100755
      def add_annot_highlight(self):
          if self.buffer_widget.is_select_mode:
              self.buffer_widget.annot_select_char_area("highlight")
+diff --git a/eaf_pdf_document.py b/eaf_pdf_document.py
+index ce22a26..60ea0ff 100644
+--- a/eaf_pdf_document.py
++++ b/eaf_pdf_document.py
+@@ -83,8 +83,6 @@ class PdfDocument(fitz.Document):
+                 self.watch_callback(url)
+             self.file_changed_timer.stop()
+         except Exception:
+-            self.watch_callback = None
+-
+             if os.path.exists(url):
+                 self.file_changed_timer.start()
+                 print("Failed to reload PDF file: " + url)
 diff --git a/eaf_pdf_widget.py b/eaf_pdf_widget.py
-index dbf6cdc..2a46356 100644
+index dbf6cdc..6724261 100644
 --- a/eaf_pdf_widget.py
 +++ b/eaf_pdf_widget.py
 @@ -23,6 +23,7 @@ import math
@@ -50,7 +71,189 @@ index dbf6cdc..2a46356 100644
          self.start_char_rect_index = None
          self.start_char_page_index = None
          self.last_char_rect_index = None
-@@ -1349,9 +1351,20 @@ class PdfViewerWidget(QWidget):
+@@ -195,12 +197,10 @@ class PdfViewerWidget(QWidget):
+         self.scroll_offset_before_presentation = 0
+         self.scroll_ratio = 0.05
+         self.scroll_wheel_lasttime = time.time()
++        self.zoom_wheel_delta = 0
+         if self.pdf_scroll_ratio != 0.05:
+             self.scroll_ratio = self.pdf_scroll_ratio
+ 
+-        # Default presentation mode
+-        self.presentation_mode = False
+-
+         # Padding between pages.
+         self.page_padding = 10
+ 
+@@ -243,6 +243,7 @@ class PdfViewerWidget(QWidget):
+         self.current_page_index1 = 1 # for mode-line-position, start from 1
+         self.last_page_index = 0
+         self.top_y = 0 # y coordinate of scroll_offset relative to the start of the start_page_index
++        self.presentation_page_y = 0
+ 
+         self.load_document(url)
+ 
+@@ -285,6 +286,8 @@ class PdfViewerWidget(QWidget):
+         # Register file watcher, when document is change, re-calling this function.
+         self.document.watch_file(url, self.load_document)
+ 
++        if self.is_select_mode:
++            self.cleanup_select()
+         self.update()
+     
+     def offset_y_to_render_y1(self, y):
+@@ -341,13 +344,16 @@ class PdfViewerWidget(QWidget):
+         Given y coordinate relative to the top of the window (e.g. cursor position), 
+         Returned the page index and y coordinate relative to the page of pymupdf.
+         """
++        if self.presentation_mode:
++            return self.start_page_index, (y - self.presentation_page_y) / self.scale
+         render_offset = y + self.top_y
++        index = None
+         for index in range(self.start_page_index, self.last_page_index):
+             page_height = self.page_heights[index] * self.scale + self.page_padding
+             if render_offset < page_height:
+                 break
+             render_offset -= page_height
+-        if index >= self.page_total_number:
++        if index is None or index >= self.page_total_number:
+             index = None
+         return index, render_offset / self.scale
+     
+@@ -367,10 +373,12 @@ class PdfViewerWidget(QWidget):
+         except Exception:
+             return False
+ 
++    @property
++    def presentation_mode(self):
++        return self.read_mode == "fit_to_presentation"
++
+     @interactive
+     def enter_presentation_mode(self):
+-        self.presentation_mode = True
+-
+         self.scale_before_presentation = self.scale
+         self.read_mode_before_presentation = self.read_mode
+         self.scroll_offset_before_presentation = self.scroll_offset
+@@ -383,7 +391,8 @@ class PdfViewerWidget(QWidget):
+ 
+     @interactive
+     def quit_presentation_mode(self):
+-        self.presentation_mode = False
++        if not self.presentation_mode:
++            return
+ 
+         self.buffer.exit_fullscreen_request.emit()
+ 
+@@ -407,11 +416,10 @@ class PdfViewerWidget(QWidget):
+         '''
+         Toggle presentation mode.
+         '''
+-        self.presentation_mode = not self.presentation_mode
+         if self.presentation_mode:
+-            self.enter_presentation_mode()
+-        else:
+             self.quit_presentation_mode()
++        else:
++            self.enter_presentation_mode()
+ 
+     @property
+     def scroll_step_vertical(self):
+@@ -618,7 +626,7 @@ class PdfViewerWidget(QWidget):
+ 
+         # Select char area when is_select_mode is True.
+         if self.is_select_mode:
+-            qpixmap = self.mark_select_obj_area(index, qpixmap)
++            qpixmap = self.mark_select_obj_area(index, qpixmap.copy())
+ 
+         # Init x and y coordinate.
+         page_render_x = (self.rect().width() - self.page_render_width) / 2
+@@ -640,6 +648,8 @@ class PdfViewerWidget(QWidget):
+                 self.page_render_width = self.rect().width()
+                 self.page_render_height = self.page_render_width * page_proportion
+ 
++        self.presentation_page_y = page_render_y
++
+         # Draw page.
+         rect = QRect(int(page_render_x), int(page_render_y), int(self.page_render_width), int(self.page_render_height))
+         painter.drawRect(rect)
+@@ -788,6 +798,11 @@ class PdfViewerWidget(QWidget):
+ 
+     @build_context_wrap    # type: ignore
+     def wheelEvent(self, event):
++        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
++            self.zoom_by_wheel(event.angleDelta().y())
++            event.accept()
++            return
++
+         if not event.accept():
+             if event.angleDelta().y():
+                 numSteps = event.angleDelta().y()
+@@ -795,21 +810,31 @@ class PdfViewerWidget(QWidget):
+                     # page scrolling
+                     curtime = time.time()
+                     if curtime - self.scroll_wheel_lasttime > 0.1:
+-                        numSteps = 1 if numSteps > 0 else -1
+                         self.scroll_wheel_lasttime = curtime
+-                    else:
+-                        numSteps = 0
++                        if numSteps > 0:
++                            self.prev_page()
++                        else:
++                            self.next_page()
+                 else:
+                     # fixed pixel scrolling
+-                    numSteps = numSteps / 120
+-                new_pos = self.scroll_offset - numSteps * self.scroll_step_vertical
+-                self.update_vertical_offset(new_pos)    # type: ignore
++                    new_pos = self.scroll_offset - numSteps / 120 * self.scroll_step_vertical
++                    self.update_vertical_offset(new_pos)    # type: ignore
+ 
+             if event.angleDelta().x():
+                 new_pos = (self.horizontal_offset + event.angleDelta().x() / 120 * self.scroll_step_horizontal)
+                 max_pos = (self.page_width * self.scale - self.rect().width())
+                 self.update_horizontal_offset(max(min(new_pos , max_pos), -max_pos))    # type: ignore
+ 
++    def zoom_by_wheel(self, delta):
++        notch = 120
++        self.zoom_wheel_delta += delta
++        while self.zoom_wheel_delta >= notch:
++            self.zoom_wheel_delta -= notch
++            self.zoom_in()
++        while self.zoom_wheel_delta <= -notch:
++            self.zoom_wheel_delta += notch
++            self.zoom_out()
++
+     def update_page_size(self, rect):
+         current_page_index = self.start_page_index
+         self.page_width = rect.width
+@@ -855,14 +880,25 @@ class PdfViewerWidget(QWidget):
+ 
+     @interactive
+     def toggle_read_mode(self):
++        leaving_presentation = self.presentation_mode
+         if self.read_mode == "fit_to_customize":
+             self.read_mode = "fit_to_width"
+         elif self.read_mode == "fit_to_width":
+             self.read_mode = "fit_to_presentation"
++            self.scroll_offset_before_presentation = self.scroll_offset
++            self.start_page_index = self.current_page_index1 - 1
++            self.start_page_index_before_presentation = self.start_page_index
+         elif self.read_mode == "fit_to_presentation":
+             self.read_mode = "fit_to_width"
+ 
+         self.update_scale()
++
++        if leaving_presentation:
++            if self.start_page_index == self.start_page_index_before_presentation:
++                self.scroll_offset = self.scroll_offset_before_presentation
++            else:
++                self.scroll_offset = min(self.page_y_to_offset_y(self.start_page_index), self.max_scroll_offset())
++
+         self.update()
+ 
+     def next_page(self):
+@@ -1349,9 +1385,20 @@ class PdfViewerWidget(QWidget):
          self.annot_action_sequence.append(annot_action)
          self.annot_action_index += 1
  
@@ -73,7 +276,7 @@ index dbf6cdc..2a46356 100644
              page = self.document[page_index]
  
              if annot_type == "highlight":
-@@ -1372,14 +1385,40 @@ class PdfViewerWidget(QWidget):
+@@ -1372,14 +1419,40 @@ class PdfViewerWidget(QWidget):
                  point = quads[-1].lr # lower right point
                  new_annot = page.add_text_annot(point, text, icon="Note")
  
@@ -114,7 +317,7 @@ index dbf6cdc..2a46356 100644
  
      def annot_popup_text_annot(self, text=None):
          (point, page_index) = self.popup_text_annot_pos
-@@ -1765,7 +1804,8 @@ class PdfViewerWidget(QWidget):
+@@ -1765,7 +1838,8 @@ class PdfViewerWidget(QWidget):
              self.update()
  
      def get_cursor_absolute_position(self, screen_pos=None):
@@ -124,7 +327,7 @@ index dbf6cdc..2a46356 100644
          ex, ey = pos.x(), pos.y()
          # set page coordinate
          render_width = self.page_width * self.scale
-@@ -1817,6 +1857,15 @@ class PdfViewerWidget(QWidget):
+@@ -1817,6 +1891,15 @@ class PdfViewerWidget(QWidget):
              return word_range[2]
  
      def eventFilter(self, obj, event):

@@ -1,0 +1,14 @@
+diff --git a/eaf.py b/eaf.py
+index 1d113d8..abfa46f 100755
+--- a/eaf.py
++++ b/eaf.py
+@@ -621,6 +621,9 @@ class OCRThread(QThread):
+ if __name__ == "__main__":
+     import sys
+     import signal
++    import traceback
++
++    sys.excepthook = traceback.print_exception
+ 
+     proxy_string = ""
+ 
