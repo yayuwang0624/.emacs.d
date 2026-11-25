@@ -2737,6 +2737,25 @@ Any other bookmark belongs to the project that contains its file."
         org-appear-inside-latex t))
 #+end_src
 
+** phscroll
+#+begin_src emacs-lisp
+(use-package phscroll
+  :vc (:url "https://github.com/misohena/phscroll" :branch "master")
+  :init
+  (setq org-startup-truncated nil)
+  (with-eval-after-load 'org
+    (require 'org-phscroll)))
+#+end_src
+
+** org-table-wrap
+#+begin_src emacs-lisp
+(use-package org-table-wrap
+  :vc (:url "https://github.com/benthamite/org-table-wrap" :branch "main")
+  :commands (org-table-wrap-mode global-org-table-wrap-mode)
+  :config
+  (setq org-table-wrap-width-fraction 1.0))
+#+end_src
+
 ** alert
 #+begin_src emacs-lisp
 (with-eval-after-load 'alert
@@ -2934,7 +2953,34 @@ With a prefix ARG kill the active timer."
           "--plus-style" "syntax #2e493d"
           "--minus-style" "syntax #5f343a"
           "--plus-emph-style" "syntax #3d5f47"
-          "--minus-emph-style" "syntax #7b3f45")))
+          "--minus-emph-style" "syntax #7b3f45"))
+
+  (defvar magit-delta-max-diff-lines 1500
+    "Diffs with more lines than this skip delta and keep magit's own faces.")
+
+  (defun magit-delta-remap-diff-faces (remap)
+    "Map magit's diff faces to `default' when REMAP is non-nil, else restore them."
+    (let ((faces '(magit-diff-context-highlight
+                   magit-diff-added
+                   magit-diff-added-highlight
+                   magit-diff-removed
+                   magit-diff-removed-highlight)))
+      (setq face-remapping-alist
+            (append (seq-remove (lambda (entry) (memq (car entry) faces))
+                                face-remapping-alist)
+                    (and remap (mapcar (lambda (face) (cons face 'default)) faces))))))
+
+  (defun magit-delta-only-small-diffs (orig)
+    "Run ORIG only for diffs of at most `magit-delta-max-diff-lines' lines.
+Delta colors through one overlay per color run, and tens of thousands of
+overlays make every redisplay of the magit buffer slow."
+    (let ((small (<= (count-lines (point-min) (point-max)) magit-delta-max-diff-lines)))
+      (magit-delta-remap-diff-faces small)
+      (when small
+        (funcall orig))))
+
+  (advice-add 'magit-delta-call-delta-and-convert-ansi-escape-sequences
+              :around #'magit-delta-only-small-diffs))
 #+end_src
 
 ** diff-hl
@@ -3483,6 +3529,14 @@ gets that window's size."
    '("n S" . org-literature-search-pdfs))
   (miao-leader-define-major-keys '(org-mode eaf-mode)
     '("n r t" . org-literature-edit-tags)))
+#+end_src
+
+** org-roadmap
+#+begin_src emacs-lisp
+(use-package org-roadmap
+  :load-path "~/Project/org-roadmap/"
+  :commands (org-roadmap-write-markdown org-roadmap-write-html org-roadmap-write-svg
+             org-roadmap-preview-mermaid org-roadmap-preview-graphviz))
 #+end_src
 
 * remote
